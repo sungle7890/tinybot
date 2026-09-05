@@ -5,17 +5,23 @@
 Every phase needs an explicit **exit criterion** before moving on.
 Advancing on "seems to work" turns into an untraceable bug later.
 
-## Phase 0 — Design and parts ← **current**
+## Phase 0 — Design and parts ✅
 
-- [ ] Pick the board (see [05-open-questions_eng.md](05-open-questions_eng.md))
+- [x] Board picked — option A, ESP32-S3 standalone ([05-open-questions_eng.md](05-open-questions_eng.md))
+- [x] Wiring diagram drawn ([../hardware/wiring_eng.md](../hardware/wiring_eng.md))
 - [ ] Finalize BOM and order
-- [ ] Draw the wiring diagram (`hardware/`)
 
 **Exit**: parts on the desk, and a drawing of what plugs in where.
+→ Only the order is left.
 
-## Phase 1 — Hardware bring-up
+## Phase 1 — Hardware bring-up ← **current**
 
-- [ ] PlatformIO project, build/upload pipeline
+> Firmware is written and compiles. Every item below is a **hardware
+> verification** item and cannot be checked until parts arrive. Procedure:
+> [../firmware/README_eng.md](../firmware/README_eng.md).
+
+- [x] PlatformIO project, build pipeline (`pio run` succeeds)
+- [ ] Upload verified
 - [ ] Motors driven both directions with PWM speed control
 - [ ] Encoder counts read and converted to real distance (mm)
 - [ ] Three ToF sensors running together (I2C address reassignment)

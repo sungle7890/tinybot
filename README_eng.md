@@ -46,5 +46,9 @@ docs/       Design documents
 
 ## Status
 
-**Phase 0 — design.** No parts purchased yet.
-`firmware/` and `host/` stay empty until the board choice is settled.
+**Phase 1 — firmware written, hardware verification pending.**
+
+- Phase 0 closed. Board is the ESP32-S3 standalone, option A — [docs/05-open-questions_eng.md](docs/05-open-questions_eng.md)
+- `firmware/` compiles (`pio run` succeeds, no warnings under `-Wall -Wextra`)
+- **No parts yet, so nothing is verified on hardware.** Bring-up procedure: [firmware/README_eng.md](firmware/README_eng.md)
+- `host/` starts in phase 2

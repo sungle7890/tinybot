@@ -14,7 +14,8 @@ rationale in this document.
 | **C. MCU + Pi Zero 2 W** | Host rides on the robot | Fully autonomous plus vision | More cost, weight, power draw |
 | **D. Buy a Microduck** | $399 | A state-of-the-art RL robot immediately | None of the building; shallower learning |
 
-**Undecided.** But A→B→C can extend on the same hardware, which is exactly why
+**Decided: A (ESP32-S3 only).** 2026-09-04.
+B and C are deferred, not discarded. A→B→C extends on the same hardware, which is exactly why
 [02-architecture_eng.md](02-architecture_eng.md) fixes the two-tier split now.
 Starting at A wastes nothing on the way to C.
 
@@ -27,8 +28,9 @@ recommended.
 - If no → ESP32-S3 or Nano 33 BLE Sense, either is fine
 - If yes → ESP32-S3 (low resolution only) or a Pi-class board is effectively forced
 
-**Undecided.** Phase-3 Q-learning needs no camera. Deferring the need to phase 4
-means this does not have to be decided now.
+**Decided: not for now.** 2026-09-04.
+Phase-3 Q-learning needs no camera. Having picked the ESP32-S3 keeps the option
+of a low-resolution camera open later.
 
 ## Q3. Locomotion — wheels or legs?
 
@@ -39,7 +41,8 @@ Microduck is a 15-servo biped. Attractive, but:
 - It mandates a simulator first, pulling phase 5 to the front
 - Most of the time goes into mechanics and control, not learning
 
-**Recommendation: start with 2WD wheels.** That keeps the focus on verifying
+**Decided: 2WD wheels.** 2026-09-04.
+ That keeps the focus on verifying
 that learning happens. Legs can be a separate project after phase 3.
 
 ## Q4. Firmware language
@@ -50,15 +53,16 @@ that learning happens. Legs can be a separate project after phase 3.
 | Rust (esp-hal) | Microduck's choice. Safe, but a steep embedded-ecosystem learning cost |
 | MicroPython | Fast to prototype, unsuitable for a deterministic 50 Hz loop |
 
-**Recommendation: PlatformIO + C++.** Learning a new language during a first
+**Decided: PlatformIO + C++.** 2026-09-04.
+Learning a new language during a first
 embedded project makes it hard to tell "is this my logic or the language?" while
 debugging.
 
 ## Q5. Budget ceiling
 
-~₩100,000–120,000 per the BOM. Add ~₩50,000 for a Pi Zero 2 W.
+~₩100,000–120,000 for option A. The Pi Zero 2 W is deferred, so no extra cost.
 
-**Undecided.**
+**Undecided — confirm before ordering.**
 
 ---
 
@@ -67,3 +71,8 @@ debugging.
 | Date | Decision | Rationale |
 |---|---|---|
 | 2026-09-04 | Repo created, two-tier architecture adopted | A structure that is not wasted whichever board is chosen |
+| 2026-09-04 | **Q1 = A: ESP32-S3 only** | Dual cores physically separate the control loop from comms. Extending to B or C keeps A's firmware intact |
+| 2026-09-04 | **Q2 = camera deferred** | Not needed through phase 3. The ESP32-S3 leaves room to add one later |
+| 2026-09-04 | **Q3 = 2WD wheels** | Bipeds cannot be trained by trial and error on real hardware, which would force the simulator first |
+| 2026-09-04 | **Q4 = PlatformIO + C++** | Learning a new language during a first embedded project makes it impossible to isolate causes while debugging |
+| 2026-09-04 | Arduino core 2.x via the official espressif32 platform | A proven combination. LEDC calls are version-guarded so core 3.x also builds |

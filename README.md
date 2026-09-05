@@ -43,5 +43,9 @@ docs/       설계 문서
 
 ## 상태
 
-**Phase 0 — 설계 중.** 아직 부품을 사지 않았다.
-보드 선택이 확정되기 전까지 `firmware/`와 `host/`는 비어 있다.
+**Phase 1 — 펌웨어 작성 완료, 실기 검증 대기.**
+
+- Phase 0 종료. 보드는 ESP32-S3 단독(A안)으로 확정 — [docs/05-open-questions.md](docs/05-open-questions.md)
+- `firmware/`는 컴파일까지 확인됨 (`pio run` 성공, `-Wall -Wextra` 경고 없음)
+- **아직 부품이 없어 실기 검증은 0.** 브링업 절차는 [firmware/README.md](firmware/README.md)
+- `host/`는 Phase 2에서 시작

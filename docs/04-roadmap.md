@@ -5,17 +5,22 @@
 각 단계는 **완료 조건**이 명확해야 다음으로 넘어간다.
 "대충 되는 것 같다"로 넘어가면 뒤에서 원인 불명 버그가 된다.
 
-## Phase 0 — 설계 · 부품 확정 ← **현재**
+## Phase 0 — 설계 · 부품 확정 ✅
 
-- [ ] 보드 확정 ([05-open-questions.md](05-open-questions.md) 참조)
+- [x] 보드 확정 — A안, ESP32-S3 단독 ([05-open-questions.md](05-open-questions.md))
+- [x] 배선도 작성 ([../hardware/wiring.md](../hardware/wiring.md))
 - [ ] BOM 확정 및 발주
-- [ ] 배선도 작성 (`hardware/`)
 
 **완료 조건**: 부품이 책상에 있고, 어디에 뭘 꽂을지 종이에 그려져 있다.
+→ 발주만 남음.
 
-## Phase 1 — 하드웨어 브링업
+## Phase 1 — 하드웨어 브링업 ← **현재**
 
-- [ ] PlatformIO 프로젝트 생성, 빌드/업로드 파이프라인
+> 펌웨어는 작성·컴파일 완료. 아래 항목은 전부 **실기 검증** 항목이므로
+> 부품이 도착해야 체크할 수 있다. 절차는 [../firmware/README.md](../firmware/README.md).
+
+- [x] PlatformIO 프로젝트 생성, 빌드 파이프라인 (`pio run` 성공)
+- [ ] 업로드 확인
 - [ ] 모터 양방향 구동 + PWM 속도 제어
 - [ ] 엔코더 카운트 읽기 → 실제 이동거리(mm) 환산
 - [ ] ToF 3개 동시 동작 (I2C 주소 재할당)
