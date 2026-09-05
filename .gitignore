@@ -1,0 +1,23 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# Training artifacts
+*.onnx
+*.pt
+runs/
+logs/
+checkpoints/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
