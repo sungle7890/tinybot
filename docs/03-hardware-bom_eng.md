@@ -10,13 +10,22 @@ Prices are rough, as of 2026. Re-check before ordering.
 |---|---|---|
 | Uno R3 (ATmega328P) | 16 MHz, 2 KB SRAM | Q-learning works, TinyML does not. No headroom |
 | **Nano 33 BLE Sense Rev2** | nRF52840 M4F 64 MHz, 256 KB RAM, onboard IMU/mic/proximity | Official Arduino TinyML board. Built-in sensors cut wiring |
-| Uno R4 WiFi | RA4M1 48 MHz + ESP32-S3 (WiFi) | Fine. Convenient for wireless telemetry |
+| **Uno R4 WiFi** | RA4M1 M4 48 MHz, 32 KB SRAM, 8 KB EEPROM, Qwiic, onboard ESP32-S3 (WiFi) | **Chosen.** Already owned; enough for phases 1–3 and it opens wireless telemetry |
 | **ESP32-S3** | Dual-core 240 MHz, PSRAM, ESP-NN acceleration | Best value. Camera and WiFi included. One core can be pinned to the control loop |
 | Raspberry Pi Zero 2 W | Linux, quad-core | For putting the host tier on the robot itself |
 
-**Recommendation**: ESP32-S3 as the MCU tier. Dual cores let us physically
-separate the control loop (core 0) from communication (core 1) — which
-dissolves the loop-jitter problem from the architecture doc at design time.
+**Decided (2026-09-05): Uno R4 WiFi.** Already on hand, so it saves $15, and
+32 KB of SRAM is plenty for phases 1–3 (the Q-table is 64 bytes). Its 8 KB
+EEPROM covers persisting what the robot learns, and Qwiic removes I2C soldering.
+
+**The ESP32-S3 is deferred to Phase 4, not discarded.** Its second core lets the
+control loop be physically separated from comms, and 32 KB will not be enough
+for TinyML. The firmware supports both boards behind `src/hal/`, so switching
+later costs no rewrite.
+
+The price of the R4 is that one core means a cooperatively scheduled control
+loop. Whether it holds the ±2 ms budget is something the `j` command has to
+measure.
 
 ## Drivetrain
 
@@ -109,7 +118,40 @@ same JST-SH 4-pin standard, so they plug straight in.
 Tools, if not owned: soldering iron and solder ~$40, cutters/strippers ~$15,
 multimeter ~$20.
 
+## Budget alternative (~$70)
+
+A generic 2WD kit plus N20 encoder motors, a GY-530 (VL53L0X) 3-pack, a GY-521
+(MPU6050) and a TB6612 module from AliExpress or Amazon — under half the list
+above.
+
+But **encoder quality varies a lot**, and that shows up immediately at the
+Phase 1 odometry gate (±5 %). XSHUT breakout also **differs per listing**, and
+`firmware/src/sense/tof.cpp` requires it, so check the product photos before
+buying.
+
 ## Rationale
+
+### Use NiMH, not alkaline
+
+Six alkaline AAs is 9 V, above the rating of the Romi's mini plastic gearmotors,
+and shortens their life. Six NiMH gives a comfortable 7.2 V.
+
+Learning runs are long enough that rechargeables are needed regardless.
+
+### Expected counts/m
+
+The Romi encoders give 12 counts per motor-shaft revolution counting both edges
+of both channels (4x). The firmware decodes 2x, counting both edges of channel A
+only, so 6 counts per motor revolution.
+
+```
+6 counts/rev x 120:1 gearbox = 720 counts per wheel revolution
+70 mm wheel -> 0.2199 m circumference
+720 / 0.2199 = about 3274 counts/m
+```
+
+That value is what sits in `cfg::kDefaultCountsPerMeter`.
+**It is a starting point only — calibrate with `cal`.**
 
 ### Why #3541 rather than #3543
 
