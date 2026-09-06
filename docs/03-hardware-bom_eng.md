@@ -39,9 +39,44 @@ measure.
 ### Why encoders are mandatory
 
 If the reward is "+1 for moving forward" but we cannot tell whether the robot
-actually moved, the reward lies. Pressed against a wall with wheels spinning
-freely, the robot keeps collecting +1, and learning converges on "hug the wall."
-Doing this project without encoders guarantees meeting that bug.
+actually moved, the reward lies. Encoders report **how far the wheels actually
+turned**, not what was commanded.
+
+Things time-based estimation cannot catch:
+
+- Motors slowing at the same PWM as the battery sags
+- Left/right motor mismatch, so a straight command curves
+- Speed changing with floor surface
+- Gearbox and wheel-diameter tolerance (corrected by `cal`)
+- **Stall** — motor held still against a wall. Counts stop at zero
+
+### ⚠️ But encoders cannot catch slip
+
+The encoder sits on the **motor shaft**. It measures wheel rotation, not ground
+displacement. If a wheel loses traction and spins, counts rise normally while
+the robot goes nowhere.
+
+| Situation | Wheel turns | Encoder | Robot moves |
+|---|---|---|---|
+| Normal | ○ | rising | ○ |
+| **Stall** (motor held) | ✗ | **zero** ← caught | ✗ |
+| **Slip** (spinning free) | ○ | **rising** ← missed | ✗ |
+
+Computing the phase-3 reward from encoders alone rewards a slipping robot for
+"moving forward." It needs a cross-check:
+
+- **Front ToF delta** — if the encoders claim 50 mm of travel and the front
+  range has not changed, the robot did not move. This failure mode has a wall in
+  front of it by definition, which is exactly when the ToF is most trustworthy.
+  The cheapest and most reliable cross-check.
+- **Bumpers** — pressed hard enough to slip, the bumper likely trips first. It
+  already preempts as a hard interrupt.
+- IMU acceleration — buried in noise at these speeds; not practical.
+
+### Stall also damages hardware
+
+A plastic gearbox held in stall heats the motor and strips gears. "Duty applied
+but counts flat for N ticks" must cut power. To be implemented in Phase 2.
 
 ## Sensors
 

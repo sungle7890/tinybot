@@ -58,6 +58,10 @@ Q[s][a] += alpha * (reward + gamma * max_a2(Q[s2][a2]) - Q[s][a]);
 - State: distance-sensor bucket × left/right difference × previous action
 - Actions: forward / turn left / turn right / reverse
 - Reward: collision −10, forward +1, spinning in place −0.1 (draft, needs tuning)
+  - ⚠️ Measure travel with the encoders but **do not trust them alone.** A
+    slipping wheel raises the count while the robot stands still. Cross-check
+    against the front ToF delta — see
+    [03-hardware-bom_eng.md](03-hardware-bom_eng.md)
 - Persistence: checkpoint the Q-table to EEPROM/Flash so learning survives power cycles
 
 This alone produces a robot that moves without commands and gets better on its own.
