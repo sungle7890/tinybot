@@ -58,92 +58,94 @@ Doing this project without encoders guarantees meeting that bug.
 > "why isn't it learning?" — the kind of bug that costs days to trace.
 > Keep motor and logic power separate; tie only the grounds together.
 
-## Purchase list (US sourcing, checked 2026-09-04)
+## Order list (US, checked 2026-09-05)
 
-Prices are unit prices at the time of checking. Stock and pricing move; re-check
-before ordering.
+Unit prices at the time of checking. Re-check before ordering.
 
-### Option 1 — Pololu Romi, integrated (recommended)
+### Stage 1 — sensors (Adafruit): order now, start without the chassis
 
-| # | Part | Vendor / SKU | Unit | Qty | Subtotal |
-|---|---|---|---|---|---|
-| 1 | Romi Chassis Kit (chassis, 2 motors, wheels, ball casters, 6×AA holder) | Pololu [#3502](https://www.pololu.com/product/3502) | $39.95 | 1 | $39.95 |
-| 2 | Romi Encoder Pair Kit | Pololu [#3542](https://www.pololu.com/product/3542) | $9.95 | 1 | $9.95 |
-| 3 | Motor Driver and Power Distribution Board for Romi | Pololu [#3543](https://www.pololu.com/product/3543) | $34.95 | 1 | $34.95 |
-| 4 | ~~ESP32-S3-DevKitC-1-N8~~ → **use the UNO R4 WiFi already on hand** | — | $0 | — | **$0** |
-| 5 | VL53L0X ToF breakout | Adafruit [#3317](https://www.adafruit.com/product/3317) | $14.95 | 3 | $44.85 |
-| 6 | MPU-6050 6-DoF IMU | Adafruit [#3886](https://www.adafruit.com/product/3886) | $12.95 | 1 | $12.95 |
-| 7 | Snap-action switch, 18.5 mm lever (bumpers) | Pololu [#1405](https://www.pololu.com/product/1405) | $2.37 | 2 | $4.74 |
-| 8 | AA NiMH cells (Eneloop or similar) + charger | Amazon | ~$30 | 1 | ~$30 |
-| 9 | Jumper wires, standoffs, perfboard, USB-C cable | Amazon / Adafruit | ~$25 | 1 | ~$25 |
-| | | | | **Total** | **~$203** |
+| Part | SKU | Unit | Qty | Subtotal |
+|---|---|---|---|---|
+| VL53L0X ToF distance sensor | [Adafruit 3317](https://www.adafruit.com/product/3317) | $14.95 | 3 | $44.85 |
+| MPU-6050 6-DoF IMU | [Adafruit 3886](https://www.adafruit.com/product/3886) | $12.95 | 1 | $12.95 |
+| STEMMA QT / Qwiic cable, 100 mm | [Adafruit 4210](https://www.adafruit.com/product/4210) | $0.95 | 4 | $3.80 |
+| | | | **Subtotal** | **$61.60** |
 
-> Line 4 dropped on 2026-09-05: phases 1–3 run on the UNO R4 WiFi already owned.
-> Buy the ESP32-S3 for $15 if and when Phase 4 (TinyML) needs it — the firmware
-> already supports both boards.
+Four cables chain R4 → ToF1 → ToF2 → ToF3 → IMU. Qwiic and STEMMA QT are the
+same JST-SH 4-pin standard, so they plug straight in.
 
-### Option 2 — discrete parts (TB6612FNG)
+### Stage 2 — chassis, drivetrain, power (Pololu)
 
-Replace line 3 above with:
+| Part | SKU | Unit | Qty | Subtotal |
+|---|---|---|---|---|
+| Romi Chassis Kit (chassis, 2 motors, wheels, casters, 6×AA holder, contacts) | [Pololu 3502](https://www.pololu.com/product/3502) | $39.95 | 1 | $39.95 |
+| Romi Encoder Pair Kit | [Pololu 3542](https://www.pololu.com/product/3542) | $9.95 | 1 | $9.95 |
+| **Power Distribution Board for Romi** | [Pololu 3541](https://www.pololu.com/product/3541) | $14.95 | 1 | $14.95 |
+| TB6612FNG Dual Motor Driver Carrier | [Pololu 713](https://www.pololu.com/product/713) | $4.95 | 1 | $4.95 |
+| Snap-action switch, 18.5 mm lever (bumpers) | [Pololu 1405](https://www.pololu.com/product/1405) | $2.37 | 2 | $4.74 |
+| | | | **Subtotal** | **$74.54** |
 
-| Part | Vendor / SKU | Unit |
+### Stage 3 — power and consumables (Amazon or similar)
+
+| Part | Approx |
+|---|---|
+| 8× AA NiMH plus charger (Eneloop or similar) | ~$35 |
+| Jumper wires (M-F, F-F) | ~$8 |
+| Header pin strips | ~$5 |
+| 22 AWG wire | ~$8 |
+| Capacitors (1000 µF electrolytic, 0.1 µF ceramic) | ~$10 |
+| | **~$66** |
+
+### Total
+
+| | |
+|---|---|
+| Stage 1 sensors | $61.60 |
+| Stage 2 chassis and drivetrain | $74.54 |
+| Stage 3 consumables | ~$66 |
+| **Parts total** | **~$202** |
+| MCU | **$0** — UNO R4 WiFi already owned |
+
+Tools, if not owned: soldering iron and solder ~$40, cutters/strippers ~$15,
+multimeter ~$20.
+
+## Rationale
+
+### Why #3541 rather than #3543
+
+The earlier recommendation was [#3543](https://www.pololu.com/product/3543),
+the Motor Driver **and** Power Distribution Board at $34.95. Moving to the R4
+changed the arithmetic.
+
+| | #3543 | **#3541 + TB6612** |
 |---|---|---|
-| TB6612FNG Dual Motor Driver Carrier | Pololu [#713](https://www.pololu.com/product/713) | $4.95 |
-| 5 V step-down regulator, 1 A or better | Pololu D24V10F5 or similar | ~$10 |
-| Power switch | Pololu / Amazon | ~$3 |
+| Price | $34.95 | **$19.90** |
+| Motor driver | DRV8838 (DIR+PWM) | TB6612FNG (IN1/IN2+PWM) |
+| 5 V regulator | 2 A onboard | None — **the R4's own is enough** |
+| Reverse protection, power switch, battery contacts | ✅ | ✅ |
+| **Firmware change** | **Required** | **None** |
 
-About $201 total. **Saving $17** costs reverse-voltage protection, 2 A
-regulation, a power switch, and battery-contact wiring, all now done by hand.
-Not recommended.
+Two things decide it. **The R4 takes 6–24 V on VIN and regulates 5 V/3.3 V
+itself**, so there is no reason to pay for #3543's regulator. And #3543's
+DRV8838 is DIR+PWM, which would mean rewriting both `motors.cpp` and
+`pins_r4.h`; #3541 handles power only, so the TB6612FNG stays and the code is
+untouched.
 
-### Option 3 — budget build (~$70)
+$15 cheaper, and no work.
 
-A generic 2WD kit plus N20 encoder motors, a GY-530 (VL53L0X) 3-pack, a GY-521
-(MPU6050) and a TB6612 module from AliExpress or Amazon. Less than half the
-price, but encoder quality varies a lot and XSHUT breakout differs per listing.
-`firmware/src/sense/tof.cpp` requires XSHUT, so **confirm it before buying**.
+### ⚠️ XSHUT soldering is unavoidable
 
-## Why option 1
+Adafruit's ToF boards ship with headers loose, not soldered. All three VL53L0X
+boot at 0x29, so readdressing needs **individual control of XSHUT** (labelled
+`SHDN` on these boards). At minimum that one pin must be soldered per board.
 
-The [power pitfall](#power--the-most-common-failure-point) is this project's
-biggest failure mode, and Pololu #3543 removes it wholesale — reverse-voltage
-protection, a 2 A 5 V switching regulator, a power switch, battery contacts and
-the motor drivers on one board that drops into the chassis. No hand-wired motor
-power means no brownout resets.
+A Qwiic I2C multiplexer (TCA9548A) would dodge the address clash without
+soldering, but it means rewriting `tof.cpp`, and an iron is needed for the
+motors, encoders and battery contacts regardless. Not recommended.
 
-## What option 1 implies
+### Shipping
 
-### ⚠️ It requires a firmware change
-
-#3543 uses two **DRV8838** drivers with a DIR + PWM (phase/enable) interface,
-not the TB6612FNG's IN1/IN2 + PWM that `firmware/src/drive/motors.cpp` currently
-implements. It is a simplification — two pins per motor instead of three — but
-the code has to change. Confirm against the #3543 pinout drawing before wiring.
-
-### Expected counts/m
-
-The Romi encoders give 12 counts per motor-shaft revolution counting both edges
-of both channels (4x). The firmware decodes 2x, counting both edges of channel A
-only, so 6 counts per motor revolution.
-
-```
-6 counts/rev x 120:1 gearbox = 720 counts per wheel revolution
-70 mm wheel -> 0.2199 m circumference
-720 / 0.2199 = about 3274 counts/m
-```
-
-Close to the 3000 placeholder in `cfg::kDefaultCountsPerMeter`.
-Still **calibrate with `cal`.** The computed number is a starting point only.
-
-### Use NiMH, not alkaline
-
-Six alkaline AAs is 9 V, above the rating of the Romi's mini plastic gearmotors,
-and shortens their life. Six NiMH gives a comfortable 7.2 V — and learning runs
-are long enough that rechargeables are needed regardless.
-
-### Stock
-
-Adafruit's resale of the ESP32-S3-DevKitC-1 ([#5312](https://www.adafruit.com/product/5312))
-was out of stock when checked. DigiKey, Mouser or Amazon are better bets.
-N8 or N8R8 both work — the PSRAM goes unused. Note that N8R8's octal PSRAM
-occupies GPIO 33–37, which `include/pins.h` already avoids; keep it that way.
+Adafruit and Pololu are separate vendors, so shipping is paid twice (estimate
+$8–15 each). Combining saves money, but **taking delivery of stage 1 first is
+worth more** — readdressing three ToF sensors is the fiddliest part of Phase 1,
+and solving it before motors exist makes later fault isolation much easier.

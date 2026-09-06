@@ -57,88 +57,91 @@
 > "왜 학습이 안 되지"로 나타난다. 원인 추적에 며칠 걸리는 종류의 버그다.
 > 모터 전원과 로직 전원을 분리하고, GND만 공통으로 묶는다.
 
-## 구매 목록 (미국 기준, 2026-09-04 확인)
+## 주문 목록 (미국, 2026-09-05 확인)
 
-가격은 확인 시점의 단가. 재고와 가격은 수시로 바뀌니 발주 전 재확인할 것.
+가격은 확인 시점의 단가. 발주 전 재확인할 것.
 
-### 안 1 — Pololu Romi 통합 (권장)
+### 1단계 — 센서 (Adafruit) : 지금 주문, 섀시 없이 바로 시작
 
-| # | 부품 | 판매처 / 품번 | 단가 | 수량 | 소계 |
-|---|---|---|---|---|---|
-| 1 | Romi Chassis Kit (섀시·모터 2개·바퀴·볼캐스터·6×AA 홀더) | Pololu [#3502](https://www.pololu.com/product/3502) | $39.95 | 1 | $39.95 |
-| 2 | Romi Encoder Pair Kit | Pololu [#3542](https://www.pololu.com/product/3542) | $9.95 | 1 | $9.95 |
-| 3 | Motor Driver and Power Distribution Board for Romi | Pololu [#3543](https://www.pololu.com/product/3543) | $34.95 | 1 | $34.95 |
-| 4 | ~~ESP32-S3-DevKitC-1-N8~~ → **보유 중인 UNO R4 WiFi 사용** | — | $0 | — | **$0** |
-| 5 | VL53L0X ToF 브레이크아웃 | Adafruit [#3317](https://www.adafruit.com/product/3317) | $14.95 | 3 | $44.85 |
-| 6 | MPU-6050 6-DoF IMU | Adafruit [#3886](https://www.adafruit.com/product/3886) | $12.95 | 1 | $12.95 |
-| 7 | Snap-action switch, 18.5 mm 레버 (범퍼) | Pololu [#1405](https://www.pololu.com/product/1405) | $2.37 | 2 | $4.74 |
-| 8 | AA NiMH 충전지 (Eneloop 등) + 충전기 | Amazon | ~$30 | 1 | ~$30 |
-| 9 | 점퍼선, 스탠드오프, 만능기판, USB-C 케이블 | Amazon / Adafruit | ~$25 | 1 | ~$25 |
-| | | | | **합계** | **~$203** |
+| 부품 | SKU | 단가 | 수량 | 소계 |
+|---|---|---|---|---|
+| VL53L0X ToF 거리센서 | [Adafruit 3317](https://www.adafruit.com/product/3317) | $14.95 | 3 | $44.85 |
+| MPU-6050 6축 IMU | [Adafruit 3886](https://www.adafruit.com/product/3886) | $12.95 | 1 | $12.95 |
+| STEMMA QT / Qwiic 케이블 100 mm | [Adafruit 4210](https://www.adafruit.com/product/4210) | $0.95 | 4 | $3.80 |
+| | | | **소계** | **$61.60** |
 
-> 4번은 2026-09-05에 빠졌다. 이미 갖고 있는 UNO R4 WiFi로 Phase 1~3을 한다.
-> ESP32-S3는 Phase 4(TinyML)에서 필요해지면 그때 $15에 사면 되고,
-> 펌웨어는 이미 두 보드를 모두 지원한다.
+케이블 4개 = R4→ToF1→ToF2→ToF3→IMU 데이지체인. Qwiic과 STEMMA QT는 같은
+JST-SH 4핀 규격이라 그대로 꽂힌다.
 
-### 안 2 — 개별 부품 (TB6612FNG)
+### 2단계 — 섀시·구동·전원 (Pololu)
 
-안 1의 3번을 아래로 대체한다.
+| 부품 | SKU | 단가 | 수량 | 소계 |
+|---|---|---|---|---|
+| Romi Chassis Kit (섀시·모터 2·바퀴·캐스터·6×AA 홀더·배터리 접점) | [Pololu 3502](https://www.pololu.com/product/3502) | $39.95 | 1 | $39.95 |
+| Romi Encoder Pair Kit | [Pololu 3542](https://www.pololu.com/product/3542) | $9.95 | 1 | $9.95 |
+| **Power Distribution Board for Romi** | [Pololu 3541](https://www.pololu.com/product/3541) | $14.95 | 1 | $14.95 |
+| TB6612FNG Dual Motor Driver Carrier | [Pololu 713](https://www.pololu.com/product/713) | $4.95 | 1 | $4.95 |
+| Snap-action switch, 18.5 mm 레버 (범퍼) | [Pololu 1405](https://www.pololu.com/product/1405) | $2.37 | 2 | $4.74 |
+| | | | **소계** | **$74.54** |
 
-| 부품 | 판매처 / 품번 | 단가 |
+### 3단계 — 전원·소모품 (Amazon 등)
+
+| 부품 | 대략 |
+|---|---|
+| AA NiMH 8개 + 충전기 (Eneloop 등) | ~$35 |
+| 점퍼선 (M-F, F-F) | ~$8 |
+| 헤더핀 스트립 | ~$5 |
+| 22 AWG 전선 | ~$8 |
+| 커패시터 (1000 µF 전해 + 0.1 µF 세라믹) | ~$10 |
+| | **~$66** |
+
+### 합계
+
+| | |
+|---|---|
+| 1단계 센서 | $61.60 |
+| 2단계 섀시·구동 | $74.54 |
+| 3단계 소모품 | ~$66 |
+| **부품 합계** | **~$202** |
+| MCU | **$0** — UNO R4 WiFi 보유 |
+
+공구가 없다면 별도: 인두+납 ~$40, 니퍼/스트리퍼 ~$15, 테스터기 ~$20.
+
+## 결정 근거
+
+### 왜 #3541인가 (#3543이 아니라)
+
+이전에는 [#3543](https://www.pololu.com/product/3543) Motor Driver **and** Power
+Distribution Board($34.95)를 추천했다. R4로 오면서 계산이 바뀌었다.
+
+| | #3543 | **#3541 + TB6612** |
 |---|---|---|
-| TB6612FNG Dual Motor Driver Carrier | Pololu [#713](https://www.pololu.com/product/713) | $4.95 |
-| 5 V 스텝다운 레귤레이터 (1 A 이상) | Pololu D24V10F5 등 | ~$10 |
-| 전원 스위치 | Pololu / Amazon | ~$3 |
+| 가격 | $34.95 | **$19.90** |
+| 모터 드라이버 | DRV8838 (DIR+PWM) | TB6612FNG (IN1/IN2+PWM) |
+| 5 V 레귤레이터 | 2 A 내장 | 없음 — **R4 온보드로 충분** |
+| 역전압 보호·전원 스위치·배터리 접점 | ✅ | ✅ |
+| **펌웨어 변경** | **필요** | **불필요** |
 
-합계 약 $201. **$17 아끼는 대신** 역전압 보호, 2 A 레귤레이션, 전원 스위치,
-배터리 접점 배선을 전부 직접 해야 한다. 권장하지 않는다.
+두 가지가 결정적이다. **R4는 VIN으로 6~24 V를 받아 자체 레귤레이터로 5 V/3.3 V를
+만든다** — #3543의 레귤레이터에 값을 치를 이유가 없다. 그리고 #3543의 DRV8838은
+DIR+PWM이라 `motors.cpp`와 `pins_r4.h`를 둘 다 고쳐야 하는데, #3541은 전원만
+담당하므로 TB6612FNG를 그대로 쓰고 코드는 손대지 않는다.
 
-### 안 3 — 초저가 (~$70)
+$15 싸고, 작업도 없다.
 
-AliExpress / Amazon의 범용 2WD 키트 + N20 엔코더 모터 + GY-530(VL53L0X) 3팩 +
-GY-521(MPU6050) + TB6612 모듈. 절반 이하로 가능하지만 엔코더 품질 편차가 크고,
-XSHUT 브레이크아웃 여부가 상품마다 다르다. `firmware/src/sense/tof.cpp`가
-XSHUT을 요구하므로 **구매 전 반드시 확인**할 것.
+### ⚠️ XSHUT 납땜은 피할 수 없다
 
-## 안 1이 권장인 이유
+Adafruit ToF 보드는 헤더가 동봉되지만 납땜되어 있지 않다. VL53L0X 3개가 모두
+0x29로 부팅하므로 **XSHUT(보드 표기 `SHDN`)을 개별 제어해야** 재주소 지정이
+된다. 보드당 최소 그 한 핀은 납땜해야 한다.
 
-[전원 함정](#전원--가장-흔한-실패-지점) 항목이 이 프로젝트 최대의 실패 지점인데,
-Pololu #3543이 그걸 통째로 없앤다 — 역전압 보호, 2 A 5 V 스위칭 레귤레이터,
-전원 스위치, 배터리 접점, 모터 드라이버가 한 보드에 있고 섀시에 그대로 들어간다.
-모터 전원 배선을 직접 하지 않으면 브라운아웃 리셋도 없다.
+Qwiic I2C 멀티플렉서(TCA9548A)를 쓰면 납땜 없이 주소 충돌을 피할 수 있지만,
+`tof.cpp`를 다시 써야 하고 모터·엔코더·배터리 배선에서 어차피 인두가 필요하다.
+권장하지 않는다.
 
-## 안 1 선택 시 알아야 할 것
+### 배송
 
-### ⚠️ 펌웨어 수정이 필요하다
-
-#3543은 **DRV8838** 드라이버 2개를 쓴다. 인터페이스가 DIR + PWM (phase/enable)이라,
-현재 `firmware/src/drive/motors.cpp`의 TB6612FNG 방식(IN1/IN2 + PWM)과 다르다.
-모터당 핀이 3개에서 2개로 줄어드는, 오히려 단순해지는 변경이지만 코드는 고쳐야 한다.
-(배선 전에 #3543 핀아웃 도면으로 최종 확인할 것.)
-
-### counts/m 예상값
-
-Romi 엔코더는 모터축 1회전당 12카운트(양 채널 양 엣지 = 4체배 기준).
-현재 펌웨어는 A채널 양 엣지만 세는 2체배이므로 모터축 1회전당 6카운트.
-
-```
-6 counts/rev × 120:1 기어비 = 720 counts / 바퀴 1회전
-바퀴 지름 70 mm → 원주 0.2199 m
-720 / 0.2199 = 약 3274 counts/m
-```
-
-`cfg::kDefaultCountsPerMeter`의 자리표시자 3000과 가깝다.
-그래도 **`cal` 명령으로 실측 보정할 것.** 계산값은 시작점일 뿐이다.
-
-### 배터리는 NiMH로
-
-6×AA 슬롯에 알칼라인을 넣으면 9 V다. Romi의 미니 플라스틱 기어모터 정격을
-넘어서므로 수명이 짧아진다. NiMH 6개면 7.2 V로 적당하고, 학습 실험은 주행 시간이
-길어서 어차피 충전지가 필요하다.
-
-### 재고
-
-Adafruit의 ESP32-S3-DevKitC-1 재판매 상품([#5312](https://www.adafruit.com/product/5312))은
-확인 시점에 품절이었다. DigiKey / Mouser / Amazon 쪽이 낫다.
-N8, N8R8 어느 쪽이든 무방하다 — PSRAM은 안 쓴다. 다만 N8R8은 옥탈 PSRAM이
-GPIO 33–37을 쓰므로, 이미 그 핀들을 피해 둔 `include/pins.h`를 그대로 유지할 것.
+Adafruit와 Pololu는 별개 업체라 배송비가 두 번 든다(각 $8~15 추정).
+한 번에 몰아서 주문하면 아끼지만, **1단계를 먼저 받아 센서를 뚫어두는 편이
+낫다** — Phase 1에서 제일 까다로운 게 ToF 3개 재주소 지정이고, 모터가 붙기
+전에 해결해두면 나중에 원인 분리가 쉽다.

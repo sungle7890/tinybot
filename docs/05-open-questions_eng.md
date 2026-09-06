@@ -66,7 +66,7 @@ debugging.
 
 ~₩100,000–120,000 for option A. The Pi Zero 2 W is deferred, so no extra cost.
 
-**Undecided — confirm before ordering.**
+**Decided: ~$202 in parts** (tools separate). 2026-09-05.
 
 ---
 
@@ -84,3 +84,4 @@ debugging.
 | 2026-09-05 | Bumpers moved from interrupts to **polling** | The R4 WiFi exposes only D2/D3 as external interrupts and the encoders need both. A switch held against an obstacle stays closed far longer than one 20 ms tick |
 | 2026-09-05 | I2C on **Qwiic (Wire1, 3.3 V)** | It uses no header pins, freeing A4/A5, which is what makes the pin map fit. The Adafruit sensors are STEMMA QT, so no soldering either |
 | 2026-09-05 | R4 control loop is **cooperatively scheduled** off `micros()` | Avoids FspTimer API risk. The `j` command is the arbiter of real jitter; missing the budget is fixable inside `hal_r4.cpp` alone |
+| 2026-09-05 | Power board changed **#3543 → #3541 + TB6612** | The R4 regulates 6–24 V on VIN itself, so #3543's 2 A regulator is redundant. #3541 handles power only, keeping the TB6612 and leaving firmware and pin map untouched. Saves $15 |
