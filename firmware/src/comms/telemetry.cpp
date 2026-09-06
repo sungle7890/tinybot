@@ -1,33 +1,30 @@
 #include "comms/telemetry.h"
 
 #include <Arduino.h>
+#include <stdio.h>
 
 #include "config.h"
+#include "hal/ring_buffer.h"
 
 namespace telemetry {
 namespace {
 
-QueueHandle_t g_queue = nullptr;
-volatile uint32_t g_dropped = 0;
-volatile bool g_enabled = false;
+hal::RingBuffer<Sample, cfg::kTelemetryQueueLen> g_queue;
+uint32_t g_dropped = 0;
+bool g_enabled = false;
 
 }  // namespace
 
-void begin() {
-  g_queue = xQueueCreate(cfg::kTelemetryQueueLen, sizeof(Sample));
-}
+void begin() {}
 
 bool push(const Sample& sample) {
-  if (g_queue == nullptr || !g_enabled) return false;
-  if (xQueueSend(g_queue, &sample, 0) == pdTRUE) return true;
+  if (!g_enabled) return false;
+  if (g_queue.push(sample)) return true;
   ++g_dropped;
   return false;
 }
 
-bool pop(Sample& out) {
-  if (g_queue == nullptr) return false;
-  return xQueueReceive(g_queue, &out, 0) == pdTRUE;
-}
+bool pop(Sample& out) { return g_queue.pop(out); }
 
 uint32_t dropped() { return g_dropped; }
 
@@ -43,15 +40,27 @@ void printHeader() {
                    "shock_mg,yaw_dps,mode,safety"));
 }
 
-void printSample(const Sample& s) {
-  char line[128];
-  snprintf(line, sizeof(line), "%lu,%lu,%ld,%ld,%u,%u,%u,%d,%d,%d,%d,%u,%u",
-           static_cast<unsigned long>(s.seq),
-           static_cast<unsigned long>(s.tickUs),
-           static_cast<long>(s.encLeft), static_cast<long>(s.encRight),
-           s.tofFront, s.tofLeft, s.tofRight, s.dutyLeft, s.dutyRight,
-           s.shockMilliG, s.yawRateDps, s.mode, s.safetyReason);
-  Serial.println(line);
+// Writes only when the UART buffer can take the whole line without blocking.
+// A blocking write here would stall loop(), and on the R4 loop() is what drives
+// the control tick - dropping a telemetry line is much cheaper than slipping a
+// control period.
+bool printSample(const Sample& s) {
+  char line[cfg::kTelemetryLineMax];
+  const int len =
+      snprintf(line, sizeof(line), "%lu,%lu,%ld,%ld,%u,%u,%u,%d,%d,%d,%d,%u,%u\n",
+               static_cast<unsigned long>(s.seq),
+               static_cast<unsigned long>(s.tickUs),
+               static_cast<long>(s.encLeft), static_cast<long>(s.encRight),
+               s.tofFront, s.tofLeft, s.tofRight, s.dutyLeft, s.dutyRight,
+               s.shockMilliG, s.yawRateDps, s.mode, s.safetyReason);
+  if (len <= 0) return false;
+
+  if (Serial.availableForWrite() < len) {
+    ++g_dropped;
+    return false;
+  }
+  Serial.write(line, static_cast<size_t>(len));
+  return true;
 }
 
 }  // namespace telemetry

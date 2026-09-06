@@ -14,7 +14,11 @@ rationale in this document.
 | **C. MCU + Pi Zero 2 W** | Host rides on the robot | Fully autonomous plus vision | More cost, weight, power draw |
 | **D. Buy a Microduck** | $399 | A state-of-the-art RL robot immediately | None of the building; shallower learning |
 
-**Decided: A (ESP32-S3 only).** 2026-09-04.
+**Decided: A (MCU only).** 2026-09-04.
+**Board changed to the Arduino UNO R4 WiFi.** 2026-09-05 — already on hand, so
+it saves $15, and its onboard ESP32-S3 module opens up wireless telemetry. The
+ESP32-S3 DevKitC is deferred for Phase 4, not discarded: the firmware supports
+both boards behind `src/hal/`, so switching later costs no rewrite.
 B and C are deferred, not discarded. A→B→C extends on the same hardware, which is exactly why
 [02-architecture_eng.md](02-architecture_eng.md) fixes the two-tier split now.
 Starting at A wastes nothing on the way to C.
@@ -76,3 +80,7 @@ debugging.
 | 2026-09-04 | **Q3 = 2WD wheels** | Bipeds cannot be trained by trial and error on real hardware, which would force the simulator first |
 | 2026-09-04 | **Q4 = PlatformIO + C++** | Learning a new language during a first embedded project makes it impossible to isolate causes while debugging |
 | 2026-09-04 | Arduino core 2.x via the official espressif32 platform | A proven combination. LEDC calls are version-guarded so core 3.x also builds |
+| **2026-09-05** | **Primary board is the UNO R4 WiFi; ESP32-S3 deferred to Phase 4** | Already owned. Sufficient for phases 1–3 and saves $15. A HAL keeps both boards supported, so reversing costs nothing |
+| 2026-09-05 | Bumpers moved from interrupts to **polling** | The R4 WiFi exposes only D2/D3 as external interrupts and the encoders need both. A switch held against an obstacle stays closed far longer than one 20 ms tick |
+| 2026-09-05 | I2C on **Qwiic (Wire1, 3.3 V)** | It uses no header pins, freeing A4/A5, which is what makes the pin map fit. The Adafruit sensors are STEMMA QT, so no soldering either |
+| 2026-09-05 | R4 control loop is **cooperatively scheduled** off `micros()` | Avoids FspTimer API risk. The `j` command is the arbiter of real jitter; missing the budget is fixable inside `hal_r4.cpp` alone |

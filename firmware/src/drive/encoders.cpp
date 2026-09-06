@@ -1,44 +1,42 @@
 #include "drive/encoders.h"
 
 #include <Arduino.h>
-#include <Preferences.h>
-#include <driver/gpio.h>
 
 #include "config.h"
+#include "hal/hal.h"
 #include "pins.h"
 
 namespace encoders {
 namespace {
 
-constexpr char kNvsNamespace[] = "tinybot";
-constexpr char kNvsKeyCpm[] = "enc_cpm";
+// Bumped whenever the layout changes, so a stale blob is ignored rather than
+// read as garbage calibration.
+constexpr uint32_t kPersistMagic = 0x54424B31;  // "TBK1"
 
-portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
+struct PersistBlob {
+  uint32_t magic;
+  float countsPerMeter;
+};
 
 volatile int32_t g_leftCount = 0;
 volatile int32_t g_rightCount = 0;
 
 float g_countsPerMeter = cfg::kDefaultCountsPerMeter;
 
-// gpio_get_level() is IRAM-resident; digitalRead() is not guaranteed to be.
-inline int level(uint8_t pin) {
-  return gpio_get_level(static_cast<gpio_num_t>(pin));
-}
-
-void IRAM_ATTR onLeftEdge() {
-  const int delta = (level(pins::kLeftEncA) == level(pins::kLeftEncB)) ? 1 : -1;
-  portENTER_CRITICAL_ISR(&g_mux);
+void HAL_ISR onLeftEdge() {
+  const int delta =
+      (hal::fastRead(pins::kLeftEncA) == hal::fastRead(pins::kLeftEncB)) ? 1 : -1;
+  hal::CriticalSectionIsr lock;
   g_leftCount += delta;
-  portEXIT_CRITICAL_ISR(&g_mux);
 }
 
-void IRAM_ATTR onRightEdge() {
+void HAL_ISR onRightEdge() {
   // Mirrored: the right motor faces the opposite way on the chassis, so the
   // same physical forward motion produces the opposite phase relationship.
-  const int delta = (level(pins::kRightEncA) == level(pins::kRightEncB)) ? -1 : 1;
-  portENTER_CRITICAL_ISR(&g_mux);
+  const int delta =
+      (hal::fastRead(pins::kRightEncA) == hal::fastRead(pins::kRightEncB)) ? -1 : 1;
+  hal::CriticalSectionIsr lock;
   g_rightCount += delta;
-  portEXIT_CRITICAL_ISR(&g_mux);
 }
 
 }  // namespace
@@ -52,36 +50,27 @@ void begin() {
   attachInterrupt(digitalPinToInterrupt(pins::kLeftEncA), onLeftEdge, CHANGE);
   attachInterrupt(digitalPinToInterrupt(pins::kRightEncA), onRightEdge, CHANGE);
 
-  Preferences prefs;
-  if (prefs.begin(kNvsNamespace, /*readOnly=*/true)) {
-    g_countsPerMeter =
-        prefs.getFloat(kNvsKeyCpm, cfg::kDefaultCountsPerMeter);
-    prefs.end();
-  }
-  if (!(g_countsPerMeter > 1.0f)) {
-    g_countsPerMeter = cfg::kDefaultCountsPerMeter;
+  PersistBlob blob{};
+  if (hal::persistLoad(&blob, sizeof(blob)) && blob.magic == kPersistMagic &&
+      blob.countsPerMeter > 1.0f) {
+    g_countsPerMeter = blob.countsPerMeter;
   }
 }
 
 int32_t leftCount() {
-  portENTER_CRITICAL(&g_mux);
-  const int32_t value = g_leftCount;
-  portEXIT_CRITICAL(&g_mux);
-  return value;
+  hal::CriticalSection lock;
+  return g_leftCount;
 }
 
 int32_t rightCount() {
-  portENTER_CRITICAL(&g_mux);
-  const int32_t value = g_rightCount;
-  portEXIT_CRITICAL(&g_mux);
-  return value;
+  hal::CriticalSection lock;
+  return g_rightCount;
 }
 
 void reset() {
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   g_leftCount = 0;
   g_rightCount = 0;
-  portEXIT_CRITICAL(&g_mux);
 }
 
 float leftMeters() { return static_cast<float>(leftCount()) / g_countsPerMeter; }
@@ -94,11 +83,8 @@ bool setCountsPerMeter(float value) {
   if (!(value > 1.0f) || value > 1.0e6f) return false;
   g_countsPerMeter = value;
 
-  Preferences prefs;
-  if (!prefs.begin(kNvsNamespace, /*readOnly=*/false)) return false;
-  const bool ok = prefs.putFloat(kNvsKeyCpm, value) > 0;
-  prefs.end();
-  return ok;
+  PersistBlob blob{kPersistMagic, value};
+  return hal::persistSave(&blob, sizeof(blob));
 }
 
 bool calibrateFrom(float commandedMeters, float measuredMeters) {

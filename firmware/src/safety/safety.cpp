@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include "hal/hal.h"
 #include "pins.h"
 
 namespace safety {
@@ -9,54 +10,56 @@ namespace {
 
 constexpr uint32_t kDebounceMs = 30;
 
-portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint8_t g_reason = kNone;
 volatile uint32_t g_trippedAtMs = 0;
-volatile uint32_t g_lastEdgeMs = 0;
+uint32_t g_lastEdgeMs = 0;
 
-void IRAM_ATTR latch(uint8_t bit) {
-  const uint32_t now = millis();
-  portENTER_CRITICAL_ISR(&g_mux);
-  if (now - g_lastEdgeMs >= kDebounceMs) {
-    g_lastEdgeMs = now;
-    if (g_reason == kNone) g_trippedAtMs = now;
-    g_reason |= bit;
-  }
-  portEXIT_CRITICAL_ISR(&g_mux);
+void latch(uint8_t bit, uint32_t now) {
+  hal::CriticalSection lock;
+  if (g_reason == kNone) g_trippedAtMs = now;
+  g_reason |= bit;
 }
-
-void IRAM_ATTR onLeft() { latch(kBumperLeft); }
-void IRAM_ATTR onRight() { latch(kBumperRight); }
 
 }  // namespace
 
 void begin() {
   pinMode(pins::kBumperLeft, INPUT_PULLUP);
   pinMode(pins::kBumperRight, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(pins::kBumperLeft), onLeft, FALLING);
-  attachInterrupt(digitalPinToInterrupt(pins::kBumperRight), onRight, FALLING);
+}
+
+// Called once per control tick. The bumpers are polled rather than
+// interrupt-driven because the UNO R4 WiFi only exposes two external-interrupt
+// pins and the encoders need both. Polling is sound here: a chassis pressed
+// against an obstacle holds the switch closed for far longer than one 20 ms
+// tick, so no contact is missed. The latch below still makes the trip sticky.
+void poll() {
+  const uint32_t now = millis();
+  if (now - g_lastEdgeMs < kDebounceMs) return;
+
+  const bool left = digitalRead(pins::kBumperLeft) == LOW;
+  const bool right = digitalRead(pins::kBumperRight) == LOW;
+  if (!left && !right) return;
+
+  g_lastEdgeMs = now;
+  if (left) latch(kBumperLeft, now);
+  if (right) latch(kBumperRight, now);
 }
 
 bool tripped() { return reason() != kNone; }
 
 uint8_t reason() {
-  portENTER_CRITICAL(&g_mux);
-  const uint8_t value = g_reason;
-  portEXIT_CRITICAL(&g_mux);
-  return value;
+  hal::CriticalSection lock;
+  return g_reason;
 }
 
 uint32_t trippedAtMs() {
-  portENTER_CRITICAL(&g_mux);
-  const uint32_t value = g_trippedAtMs;
-  portEXIT_CRITICAL(&g_mux);
-  return value;
+  hal::CriticalSection lock;
+  return g_trippedAtMs;
 }
 
 void clear() {
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   g_reason = kNone;
-  portEXIT_CRITICAL(&g_mux);
 }
 
 }  // namespace safety

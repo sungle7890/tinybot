@@ -2,9 +2,9 @@
 
 #include <Arduino.h>
 #include <VL53L0X.h>
-#include <Wire.h>
 
 #include "config.h"
+#include "hal/hal.h"
 #include "pins.h"
 
 namespace tof {
@@ -49,7 +49,7 @@ uint8_t begin() {
     digitalWrite(kSlots[i].xshutPin, HIGH);
     delay(10);  // boot time before the sensor answers on 0x29
 
-    g_sensors[i].setBus(&Wire);
+    g_sensors[i].setBus(&hal::i2c());
     g_sensors[i].setTimeout(100);
     if (!g_sensors[i].init()) {
       // Put it back in reset so a half-initialised sensor cannot squat on 0x29.

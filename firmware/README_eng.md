@@ -2,32 +2,52 @@
 
 > Korean: [README.md](README.md)
 
-ESP32-S3 standalone. No learning code here.
+No learning code here.
 Phase 1 answers exactly one question: **are these sensors and this odometry good
 enough to trust as a reward signal later?**
 
-## Build
+## Two targets
+
+Every platform difference lives behind `src/hal/`; everything above it is shared.
+
+| Environment | Board | Status | Control loop |
+|---|---|---|---|
+| `uno_r4_wifi` | Arduino UNO R4 WiFi | **Default. What we are using** | Cooperative, off `micros()` from `loop()` |
+| `esp32s3` | ESP32-S3-DevKitC-1 | Deferred to Phase 4 | RTOS task pinned to core 0 |
 
 ```bash
-pio run                 # build
-pio run -t upload       # flash
-pio device monitor      # console at 115200
+pio run                      # build the default target (R4)
+pio run -e esp32s3           # build for the ESP32-S3
+pio run -t upload            # flash
+pio device monitor           # console at 115200
 ```
 
-Pinned to `platform = espressif32@6.12.0` (Arduino core 2.0.17). The LEDC calls
-in `src/drive/motors.cpp` are version-guarded so Arduino core 3.x also builds.
+> **⚠️ Apple Silicon.** The `renesas-ra` platform's default toolchain (1.70201.0)
+> ships macOS x86_64 binaries only and dies with `Bad CPU type in executable`.
+> `platformio.ini` pins `~1.100301.0`, the oldest release with a darwin_arm64
+> build.
 
-## Core split
+## Execution model
 
-| Core | Responsibility |
-|---|---|
-| 0 | Control task. Fixed 50 Hz. No `delay()`, no `Serial.print()` |
-| 1 | Arduino `loop()` — serial console, telemetry printing |
+| | UNO R4 WiFi | ESP32-S3 |
+|---|---|---|
+| Cores | 1 | 2 |
+| Control step | Cooperative, from `loop()` | Its own RTOS task on core 0 |
+| Console + telemetry | The same `loop()` | Core 1 |
+| Consequence | **Blocking `loop()` slips a tick** | Serial cannot touch control |
 
-The point is that serial traffic cannot jitter the control period. Telemetry is
-**dropped** when the queue fills (and the drops are counted). Losing telemetry is
-acceptable; a late control tick is not — [docs/02-architecture_eng.md](../docs/02-architecture_eng.md)
-design rule 1.
+The R4 has one core, so physical separation is impossible. Instead **everything
+in `loop()` must be non-blocking** — telemetry printing checks
+`Serial.availableForWrite()` first and **drops** the line if the buffer is too
+full (and counts the drop).
+
+Losing telemetry is acceptable; a late control tick is not —
+[docs/02-architecture_eng.md](../docs/02-architecture_eng.md) design rule 1.
+
+> **Whether cooperative scheduling holds the ±2 ms budget is a measurement, not
+> an assumption.** The `j` command decides. If it fails, swap
+> `controlLoopBegin` in `hal_r4.cpp` for an FspTimer implementation — nothing
+> outside that file changes.
 
 ## Console commands
 
@@ -56,6 +76,11 @@ design rule 1.
 pio run -t upload && pio device monitor
 ```
 Check `st` shows 3 ToF and the IMU. If not, start with I2C wiring and XSHUT pins.
+
+> On the R4 the sensors hang off **Qwiic (`Wire1`, 3.3 V)**. The Adafruit ToF and
+> IMU boards are STEMMA QT, so they daisy-chain with no I2C soldering.
+> **Putting 5 V on Qwiic damages the board.** The three XSHUT wires still go to
+> A0/A1/A2 individually.
 
 ### 2. Sensors alone
 `t` — wave a hand in front of each; out of range reads 8190 mm.
@@ -106,3 +131,6 @@ expected. These in particular are **guesses** until measured.
 | `kHeadingKp` = 1.2 | `include/config.h` | Lower it if the drive oscillates |
 | IMU impact threshold 0.6 g | `src/sense/imu.cpp` | Tune against a real collision |
 | Right encoder sign flip | `src/drive/encoders.cpp` | Confirm in step 4 |
+| **R4 loop jitter** | `src/hal/hal_r4.cpp` | Cooperative scheduling; measure with `j` |
+| **R4 PWM frequency** | `src/hal/hal_r4.cpp` | The R4 core exposes no frequency control, so the carrier is audible. Expect motor whine |
+| R4 interrupt pins D2/D3 | `include/pins_r4.h` | Per official docs; verify on hardware |

@@ -7,6 +7,7 @@
 #include "config.h"
 #include "drive/encoders.h"
 #include "drive/motors.h"
+#include "hal/hal.h"
 #include "safety/safety.h"
 #include "sense/imu.h"
 #include "sense/tof.h"
@@ -18,8 +19,6 @@ namespace {
 // on the target instead of coasting past it.
 constexpr float kApproachMeters = 0.15f;
 constexpr float kArrivedMeters = 0.005f;
-
-portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 
 Mode g_mode = Mode::kIdle;
 int16_t g_reqLeft = 0;
@@ -37,6 +36,9 @@ double g_mean = 0.0;
 double g_m2 = 0.0;
 uint32_t g_overruns = 0;
 
+uint32_t g_lastTickUs = 0;
+uint32_t g_seq = 0;
+
 void recordTick(uint32_t periodUs) {
   ++g_ticks;
   if (periodUs < g_minUs) g_minUs = periodUs;
@@ -46,8 +48,8 @@ void recordTick(uint32_t periodUs) {
   g_mean += delta / static_cast<double>(g_ticks);
   g_m2 += delta * (static_cast<double>(periodUs) - g_mean);
 
-  const int32_t error =
-      static_cast<int32_t>(periodUs) - static_cast<int32_t>(cfg::kLoopPeriodMs * 1000);
+  const int32_t error = static_cast<int32_t>(periodUs) -
+                        static_cast<int32_t>(cfg::kLoopPeriodMs * 1000);
   if (error > static_cast<int32_t>(cfg::kJitterBudgetUs) ||
       error < -static_cast<int32_t>(cfg::kJitterBudgetUs)) {
     ++g_overruns;
@@ -63,10 +65,9 @@ int16_t clampCorrection(float value) {
 // Ends a drive. Separate so the mode write is the only thing under the lock.
 void finishDrive(float travelled) {
   motors::brake();
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   g_driveTravelled = travelled;
   g_mode = Mode::kIdle;
-  portEXIT_CRITICAL(&g_mux);
 }
 
 // Straight-line drive with a proportional heading hold on encoder divergence.
@@ -81,8 +82,7 @@ void stepDriveDistance() {
     return;
   }
 
-  const float ramp =
-      fminf(1.0f, fabsf(remaining) / kApproachMeters);
+  const float ramp = fminf(1.0f, fabsf(remaining) / kApproachMeters);
   const float direction = remaining > 0.0f ? 1.0f : -1.0f;
   const float base = direction * ramp * cfg::kDriveDuty;
 
@@ -96,104 +96,95 @@ void stepDriveDistance() {
   g_driveTravelled = travelled;
 }
 
+// One control tick. Invoked by hal::controlLoopBegin's scheduler - as a pinned
+// RTOS task on the ESP32, cooperatively from loop() on the R4.
+void step() {
+  const uint32_t nowUs = micros();
+  const uint32_t periodUs = nowUs - g_lastTickUs;
+  g_lastTickUs = nowUs;
 
-void controlTask(void*) {
-  TickType_t lastWake = xTaskGetTickCount();
-  const TickType_t period = pdMS_TO_TICKS(cfg::kLoopPeriodMs);
+  safety::poll();
+  tof::update();
+  imu::update();
 
-  uint32_t lastTickUs = micros();
-  uint32_t seq = 0;
+  const bool bumped = safety::tripped();
 
-  for (;;) {
-    vTaskDelayUntil(&lastWake, period);
-
-    const uint32_t nowUs = micros();
-    const uint32_t periodUs = nowUs - lastTickUs;
-    lastTickUs = nowUs;
-
-    tof::update();
-    imu::update();
-
-    // Latch a bumper trip into the mode before deciding what to do. safety::
-    // takes its own spinlock, so it is read outside ours.
-    const bool bumped = safety::tripped();
-
-    // Snapshot under the lock, act outside it. Motor and I2C calls take locks
-    // of their own; running them inside a critical section risks deadlock and
-    // stretches the window with interrupts disabled.
-    Mode modeNow;
-    int16_t reqLeft;
-    int16_t reqRight;
-    portENTER_CRITICAL(&g_mux);
+  // Snapshot under the lock, act outside it. Motor and I2C calls take locks of
+  // their own; running them inside a critical section risks deadlock and
+  // stretches the window with interrupts disabled.
+  Mode modeNow;
+  int16_t reqLeft;
+  int16_t reqRight;
+  {
+    hal::CriticalSection lock;
     if (bumped && g_mode != Mode::kSafetyStop) g_mode = Mode::kSafetyStop;
     modeNow = g_mode;
     reqLeft = g_reqLeft;
     reqRight = g_reqRight;
-    portEXIT_CRITICAL(&g_mux);
-
-    switch (modeNow) {
-      case Mode::kIdle:
-        motors::coast();
-        break;
-      case Mode::kManual:
-        motors::set(reqLeft, reqRight);
-        break;
-      case Mode::kDriveDistance:
-        stepDriveDistance();  // may call finishDrive() and change the mode
-        break;
-      case Mode::kSafetyStop:
-        motors::brake();
-        break;
-    }
-
-    // Skip the very first tick: lastTickUs was seeded before the loop, so its
-    // period is meaningless and would poison min/mean.
-    if (seq > 0) {
-      portENTER_CRITICAL(&g_mux);
-      recordTick(periodUs);
-      portEXIT_CRITICAL(&g_mux);
-    }
-
-    telemetry::Sample sample{};
-    sample.seq = seq++;
-    sample.tickUs = periodUs;
-    sample.encLeft = encoders::leftCount();
-    sample.encRight = encoders::rightCount();
-    sample.tofFront = tof::rangeMm(tof::kFront);
-    sample.tofLeft = tof::rangeMm(tof::kLeft);
-    sample.tofRight = tof::rangeMm(tof::kRight);
-    sample.dutyLeft = motors::leftDuty();
-    sample.dutyRight = motors::rightDuty();
-    sample.shockMilliG = static_cast<int16_t>(imu::shock() * 1000.0f);
-    sample.yawRateDps = static_cast<int16_t>(imu::yawRateDps());
-    sample.mode = static_cast<uint8_t>(mode());
-    sample.safetyReason = safety::reason();
-    telemetry::push(sample);
   }
+
+  switch (modeNow) {
+    case Mode::kIdle:
+      motors::coast();
+      break;
+    case Mode::kManual:
+      motors::set(reqLeft, reqRight);
+      break;
+    case Mode::kDriveDistance:
+      stepDriveDistance();  // may call finishDrive() and change the mode
+      break;
+    case Mode::kSafetyStop:
+      motors::brake();
+      break;
+  }
+
+  // Skip the very first tick: g_lastTickUs was seeded before the loop started,
+  // so its period is meaningless and would poison min/mean.
+  if (g_seq > 0) {
+    hal::CriticalSection lock;
+    recordTick(periodUs);
+  }
+
+  telemetry::Sample sample{};
+  sample.seq = g_seq++;
+  sample.tickUs = periodUs;
+  sample.encLeft = encoders::leftCount();
+  sample.encRight = encoders::rightCount();
+  sample.tofFront = tof::rangeMm(tof::kFront);
+  sample.tofLeft = tof::rangeMm(tof::kLeft);
+  sample.tofRight = tof::rangeMm(tof::kRight);
+  sample.dutyLeft = motors::leftDuty();
+  sample.dutyRight = motors::rightDuty();
+  sample.shockMilliG = static_cast<int16_t>(imu::shock() * 1000.0f);
+  sample.yawRateDps = static_cast<int16_t>(imu::yawRateDps());
+  sample.mode = static_cast<uint8_t>(mode());
+  sample.safetyReason = safety::reason();
+  telemetry::push(sample);
 }
 
 }  // namespace
 
 void begin() {
-  xTaskCreatePinnedToCore(controlTask, "control", 4096, nullptr,
-                          configMAX_PRIORITIES - 2, nullptr, cfg::kControlCore);
+  g_lastTickUs = micros();
+  hal::controlLoopBegin(step, cfg::kLoopHz);
 }
 
 void requestIdle() {
-  portENTER_CRITICAL(&g_mux);
-  g_mode = safety::tripped() ? Mode::kSafetyStop : Mode::kIdle;
+  // Read the latch before taking the lock: safety:: takes a lock of its own,
+  // and nesting critical sections is a deadlock waiting to happen.
+  const bool bumped = safety::tripped();
+  hal::CriticalSection lock;
+  g_mode = bumped ? Mode::kSafetyStop : Mode::kIdle;
   g_reqLeft = 0;
   g_reqRight = 0;
-  portEXIT_CRITICAL(&g_mux);
 }
 
 void requestManual(int16_t leftDuty, int16_t rightDuty) {
   if (safety::tripped()) return;
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   g_reqLeft = leftDuty;
   g_reqRight = rightDuty;
   g_mode = Mode::kManual;
-  portEXIT_CRITICAL(&g_mux);
 }
 
 bool requestDriveDistance(float meters) {
@@ -201,20 +192,17 @@ bool requestDriveDistance(float meters) {
   if (!(fabsf(meters) > kArrivedMeters)) return false;
 
   encoders::reset();
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   g_driveCommanded = meters;
   g_driveTravelled = 0.0f;
   g_driveStartedMs = millis();
   g_mode = Mode::kDriveDistance;
-  portEXIT_CRITICAL(&g_mux);
   return true;
 }
 
 Mode mode() {
-  portENTER_CRITICAL(&g_mux);
-  const Mode value = g_mode;
-  portEXIT_CRITICAL(&g_mux);
-  return value;
+  hal::CriticalSection lock;
+  return g_mode;
 }
 
 const char* modeName(Mode m) {
@@ -233,7 +221,7 @@ float driveTravelledMeters() { return g_driveTravelled; }
 
 LoopStats stats() {
   LoopStats out{};
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   out.ticks = g_ticks;
   out.minUs = g_ticks ? g_minUs : 0;
   out.maxUs = g_maxUs;
@@ -241,19 +229,17 @@ LoopStats stats() {
   out.stdevUs =
       g_ticks > 1 ? sqrtf(static_cast<float>(g_m2 / (g_ticks - 1))) : 0.0f;
   out.overruns = g_overruns;
-  portEXIT_CRITICAL(&g_mux);
   return out;
 }
 
 void resetStats() {
-  portENTER_CRITICAL(&g_mux);
+  hal::CriticalSection lock;
   g_ticks = 0;
   g_minUs = UINT32_MAX;
   g_maxUs = 0;
   g_mean = 0.0;
   g_m2 = 0.0;
   g_overruns = 0;
-  portEXIT_CRITICAL(&g_mux);
 }
 
 }  // namespace control

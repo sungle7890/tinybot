@@ -1,8 +1,9 @@
 #include "sense/imu.h"
 
 #include <Arduino.h>
-#include <Wire.h>
 #include <math.h>
+
+#include "hal/hal.h"
 
 namespace imu {
 namespace {
@@ -36,18 +37,18 @@ bool g_baselineSeeded = false;
 float g_shock = 0.0f;
 
 bool writeReg(uint8_t reg, uint8_t value) {
-  Wire.beginTransmission(kAddress);
-  Wire.write(reg);
-  Wire.write(value);
-  return Wire.endTransmission() == 0;
+  hal::i2c().beginTransmission(kAddress);
+  hal::i2c().write(reg);
+  hal::i2c().write(value);
+  return hal::i2c().endTransmission() == 0;
 }
 
 bool readRegs(uint8_t reg, uint8_t* out, uint8_t len) {
-  Wire.beginTransmission(kAddress);
-  Wire.write(reg);
-  if (Wire.endTransmission(false) != 0) return false;
-  if (Wire.requestFrom(kAddress, len) != len) return false;
-  for (uint8_t i = 0; i < len; ++i) out[i] = Wire.read();
+  hal::i2c().beginTransmission(kAddress);
+  hal::i2c().write(reg);
+  if (hal::i2c().endTransmission(false) != 0) return false;
+  if (hal::i2c().requestFrom(kAddress, len) != len) return false;
+  for (uint8_t i = 0; i < len; ++i) out[i] = hal::i2c().read();
   return true;
 }
 

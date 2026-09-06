@@ -1,10 +1,10 @@
 #pragma once
 #include <stdint.h>
 
-// One record per control tick, handed from the control task to the console
-// task through a queue. The control task never blocks on this: if the queue is
-// full the sample is dropped and counted (docs/02-architecture.md design
-// rule 1). Dropped telemetry is acceptable; a late control tick is not.
+// One record per control tick, handed from the control step to the console
+// through a lock-free ring buffer. The control step never blocks on this: if
+// the buffer is full the sample is dropped and counted (docs/02-architecture.md
+// design rule 1). Dropped telemetry is acceptable; a late control tick is not.
 namespace telemetry {
 
 struct Sample {
@@ -25,10 +25,10 @@ struct Sample {
 
 void begin();
 
-// Called from the control task. Non-blocking; returns false when dropped.
+// Called from the control step. Non-blocking; returns false when dropped.
 bool push(const Sample& sample);
 
-// Called from the console task. Returns false when nothing is waiting.
+// Called from loop(). Returns false when nothing is waiting.
 bool pop(Sample& out);
 
 uint32_t dropped();
@@ -37,6 +37,7 @@ void setEnabled(bool on);
 bool enabled();
 
 void printHeader();
-void printSample(const Sample& sample);
+// Non-blocking: skips (and counts) the line if the UART buffer is too full.
+bool printSample(const Sample& sample);
 
 }  // namespace telemetry

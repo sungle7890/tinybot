@@ -2,7 +2,88 @@
 
 > Korean: [wiring.md](wiring.md)
 
-Must stay in sync with `firmware/include/pins.h`. Never change only one side.
+**The primary board is the Arduino UNO R4 WiFi** (decided 2026-09-05). The
+ESP32-S3 wiring is kept below for Phase 4.
+
+Must stay in sync with `firmware/include/pins_r4.h` / `pins_esp32.h`.
+
+---
+
+# A. UNO R4 WiFi (current)
+
+## Two constraints shaped this layout
+
+1. **Only D2 and D3 are interrupt-capable.** So the encoder A channels take
+   them and the bumpers are polled once per control tick. A switch held against
+   an obstacle stays closed far longer than 20 ms, so nothing is missed.
+2. **I2C runs on Qwiic.** Qwiic is a second bus (`Wire1`) and 3.3 V only. It
+   uses no header pins, which frees A4/A5 — and that is what makes 18 pins fit.
+
+## Pin assignment (R4 WiFi)
+
+| Pin | Connection | Note |
+|---|---|---|
+| D0, D1 | — | UART0 (USB console). Do not use |
+| **D2** | Left encoder A | **interrupt** |
+| **D3** | Right encoder A | **interrupt** |
+| D4 | Left encoder B | |
+| D5 | Left motor PWMA | PWM |
+| D6 | Right motor PWMB | PWM |
+| D7 | Left AIN1 | |
+| D8 | Left AIN2 | |
+| D9 | Right BIN1 | |
+| D10 | Right BIN2 | |
+| D11 | Motor STBY | |
+| D12 | Right encoder B | |
+| D13 | (spare) | Drives the onboard LED; poor as an input |
+| A0 | ToF XSHUT front | |
+| A1 | ToF XSHUT left | |
+| A2 | ToF XSHUT right | |
+| A3 | Left bumper → GND | Polled, INPUT_PULLUP |
+| A4 | Right bumper → GND | Free because I2C is on Qwiic |
+| A5 | (spare) | |
+| **Qwiic** | 3× VL53L0X + MPU-6050 | `Wire1`, **3.3 V only** |
+
+**18 used / 18 available, plus 2 spare.**
+
+## Qwiic chain
+
+Adafruit VL53L0X (#3317) and MPU-6050 (#3886) carry STEMMA QT connectors, which
+are Qwiic-compatible. **No I2C soldering.**
+
+```
+R4 Qwiic ─ VL53L0X(front) ─ VL53L0X(left) ─ VL53L0X(right) ─ MPU-6050
+```
+
+⚠️ XSHUT is not on the Qwiic cable. Each sensor still needs its own wire to
+A0/A1/A2.
+
+⚠️ **Putting 5 V on Qwiic damages the board.** It is 3.3 V only.
+
+> To use the 5 V header bus on A4/A5 instead, set `cfg::kUseQwiic` false and
+> move the right bumper from A4 to D13.
+
+## Power (R4 WiFi)
+
+The R4 accepts 6–24 V on the barrel jack and regulates 5 V/3.3 V onboard.
+
+```
+2x 18650 (7.4 V)
+   ├─→ TB6612FNG VM         (motors)
+   └─→ R4 VIN or barrel jack (logic)
+Grounds tied together
+```
+
+Logic is 5 V, so it drives the TB6612FNG (2.7–5.5 V logic) directly. The
+Adafruit ToF/IMU boards are level-shifted and 5 V safe too — but **on Qwiic they
+run at 3.3 V.**
+
+> **⚠️ Do not power motors from the R4's 5 V pin**, for the same reason given in
+> the power section below.
+
+---
+
+# B. ESP32-S3 (deferred to Phase 4)
 
 ## Pin assignment (provisional — verify against the physical board)
 

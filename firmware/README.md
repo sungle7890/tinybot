@@ -2,30 +2,48 @@
 
 > English: [README_eng.md](README_eng.md)
 
-ESP32-S3 단독 구성. 학습 코드는 여기에 없다.
+학습 코드는 여기에 없다.
 Phase 1의 목적은 하나다 — **나중에 보상 신호로 믿을 만한 센서·오도메트리인가?**
 
-## 빌드
+## 두 개의 타깃
+
+플랫폼 차이는 전부 `src/hal/` 뒤에 있다. 그 위는 공유된다.
+
+| 환경 | 보드 | 상태 | 제어 루프 |
+|---|---|---|---|
+| `uno_r4_wifi` | Arduino UNO R4 WiFi | **기본. 현재 쓰는 것** | 협조적 (`micros()` 기준, `loop()`에서 구동) |
+| `esp32s3` | ESP32-S3-DevKitC-1 | Phase 4용 보류 | 코어 0에 핀된 RTOS 태스크 |
 
 ```bash
-pio run                 # 빌드
-pio run -t upload       # 업로드
-pio device monitor      # 콘솔 (115200)
+pio run                      # 기본 타깃(R4) 빌드
+pio run -e esp32s3           # ESP32-S3 빌드
+pio run -t upload            # 업로드
+pio device monitor           # 콘솔 (115200)
 ```
 
-`platform = espressif32@6.12.0` (Arduino core 2.0.17)로 고정. Arduino core 3.x로
-옮겨도 빌드되도록 `src/drive/motors.cpp`의 LEDC 호출에 버전 가드를 넣어뒀다.
+> **⚠️ Apple Silicon 주의.** `renesas-ra` 플랫폼의 기본 툴체인(1.70201.0)은
+> macOS x86_64 바이너리뿐이라 `Bad CPU type in executable`로 죽는다.
+> `platformio.ini`에서 arm64 빌드가 있는 `~1.100301.0`으로 고정해뒀다.
 
-## 코어 분리
+## 실행 모델
 
-| 코어 | 하는 일 |
-|---|---|
-| 0 | 제어 태스크. 고정 50 Hz. `delay()` 없음, `Serial.print()` 없음 |
-| 1 | Arduino `loop()` — 시리얼 콘솔, 텔레메트리 출력 |
+| | UNO R4 WiFi | ESP32-S3 |
+|---|---|---|
+| 코어 | 1개 | 2개 |
+| 제어 스텝 | `loop()`에서 협조적 구동 | 코어 0 전용 RTOS 태스크 |
+| 콘솔·텔레메트리 | 같은 `loop()` | 코어 1 |
+| 결과 | **`loop()`를 막으면 틱이 밀린다** | 시리얼이 제어를 못 건드림 |
 
-시리얼 트래픽이 제어 주기를 흔들 수 없게 만드는 것이 핵심이다.
-텔레메트리는 큐가 차면 **버린다**(드롭 카운트로 기록). 텔레메트리 유실은 허용,
-제어 틱 지연은 불허 — [docs/02-architecture.md](../docs/02-architecture.md) 설계 규칙 1.
+R4는 단일 코어라 물리적 분리가 불가능하다. 대신 **`loop()` 안의 모든 것이
+논블로킹**이어야 한다 — 텔레메트리 출력은 `Serial.availableForWrite()`를 먼저
+확인하고, 버퍼가 모자라면 그 줄을 **버린다**(드롭 카운트로 기록).
+
+텔레메트리 유실은 허용, 제어 틱 지연은 불허 —
+[docs/02-architecture.md](../docs/02-architecture.md) 설계 규칙 1.
+
+> **협조적 스케줄링이 ±2 ms 예산을 지키는지는 실측해야 안다.**
+> `j` 명령이 판정한다. 못 지키면 `hal_r4.cpp`의 `controlLoopBegin`을
+> FspTimer 기반으로 바꾸면 되고, 그 파일 밖은 건드릴 필요가 없다.
 
 ## 콘솔 명령
 
@@ -54,6 +72,10 @@ pio device monitor      # 콘솔 (115200)
 pio run -t upload && pio device monitor
 ```
 `st`로 ToF 3개와 IMU가 잡히는지 확인. 안 잡히면 I2C 배선과 XSHUT 핀부터.
+
+> R4는 센서를 **Qwiic(`Wire1`, 3.3 V)**으로 물린다. Adafruit ToF/IMU는
+> STEMMA QT라 데이지체인만 하면 되고 I2C 납땜이 없다. **Qwiic에 5 V를 넣으면
+> 보드가 망가진다.** XSHUT 3가닥은 여전히 A0/A1/A2로 개별 배선해야 한다.
 
 ### 2. 센서 단독 확인
 `t` — 손을 대었다 떼며 값이 변하는지. 범위 밖은 8190 mm로 나온다.
@@ -103,3 +125,6 @@ j
 | `kHeadingKp` = 1.2 | `include/config.h` | 진동하면 낮출 것 |
 | IMU 충돌 임계값 0.6 g | `src/sense/imu.cpp` | 실제 충돌 데이터로 조정 |
 | 우측 엔코더 부호 반전 | `src/drive/encoders.cpp` | 4번 단계에서 확인 |
+| **R4 루프 지터** | `src/hal/hal_r4.cpp` | 협조적 스케줄링. `j`로 실측 필요 |
+| **R4 PWM 주파수** | `src/hal/hal_r4.cpp` | R4 코어가 주파수 제어를 노출하지 않아 가청 대역. 모터 소음 예상 |
+| R4 인터럽트 핀 D2/D3 | `include/pins_r4.h` | 공식 문서 기준. 실측 확인 |

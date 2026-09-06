@@ -4,9 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "comms/fmt.h"
 #include "comms/telemetry.h"
 #include "config.h"
 #include "control/control_loop.h"
+#include "hal/hal.h"
 #include "drive/encoders.h"
 #include "drive/motors.h"
 #include "safety/safety.h"
@@ -59,27 +61,27 @@ void printHelp() {
 
 void cmdStatus() {
   const control::LoopStats s = control::stats();
-  Serial.printf("mode          : %s\n",
+  fmt::printf("mode          : %s\n",
                 control::modeName(control::mode()));
-  Serial.printf("safety        : %s (reason 0x%02X)\n",
+  fmt::printf("safety        : %s (reason 0x%02X)\n",
                 safety::tripped() ? "TRIPPED" : "ok", safety::reason());
-  Serial.printf("duty          : L=%d R=%d\n", motors::leftDuty(),
+  fmt::printf("duty          : L=%d R=%d\n", motors::leftDuty(),
                 motors::rightDuty());
-  Serial.printf("encoders      : L=%ld R=%ld  (%.1f counts/m)\n",
+  fmt::printf("encoders      : L=%ld R=%ld  (%.1f counts/m)\n",
                 static_cast<long>(encoders::leftCount()),
                 static_cast<long>(encoders::rightCount()),
                 encoders::countsPerMeter());
-  Serial.printf("tof present   : front=%d left=%d right=%d\n",
+  fmt::printf("tof present   : front=%d left=%d right=%d\n",
                 tof::present(tof::kFront), tof::present(tof::kLeft),
                 tof::present(tof::kRight));
-  Serial.printf("imu           : %s (WHO_AM_I 0x%02X)\n",
+  fmt::printf("imu           : %s (WHO_AM_I 0x%02X)\n",
                 imu::present() ? "ok" : "MISSING", imu::whoAmI());
-  Serial.printf("loop          : %lu ticks, %lu overruns, telemetry dropped %lu\n",
+  fmt::printf("loop          : %lu ticks, %lu overruns, telemetry dropped %lu\n",
                 static_cast<unsigned long>(s.ticks),
                 static_cast<unsigned long>(s.overruns),
                 static_cast<unsigned long>(telemetry::dropped()));
-  Serial.printf("free heap     : %lu bytes\n",
-                static_cast<unsigned long>(ESP.getFreeHeap()));
+  fmt::printf("free memory   : %lu bytes\n",
+                static_cast<unsigned long>(hal::freeBytes()));
 }
 
 void cmdJitter() {
@@ -88,17 +90,17 @@ void cmdJitter() {
     Serial.println(F("no ticks recorded yet"));
     return;
   }
-  Serial.printf("period target : %lu us\n",
+  fmt::printf("period target : %lu us\n",
                 static_cast<unsigned long>(cfg::kLoopPeriodMs * 1000));
-  Serial.printf("ticks         : %lu\n", static_cast<unsigned long>(s.ticks));
-  Serial.printf("min / max     : %lu / %lu us\n",
+  fmt::printf("ticks         : %lu\n", static_cast<unsigned long>(s.ticks));
+  fmt::printf("min / max     : %lu / %lu us\n",
                 static_cast<unsigned long>(s.minUs),
                 static_cast<unsigned long>(s.maxUs));
-  Serial.printf("mean +/- sd   : %.1f +/- %.1f us\n", s.meanUs, s.stdevUs);
-  Serial.printf("overruns      : %lu (outside +/-%lu us)\n",
+  fmt::printf("mean +/- sd   : %.1f +/- %.1f us\n", s.meanUs, s.stdevUs);
+  fmt::printf("overruns      : %lu (outside +/-%lu us)\n",
                 static_cast<unsigned long>(s.overruns),
                 static_cast<unsigned long>(cfg::kJitterBudgetUs));
-  Serial.printf("PHASE 1 GATE  : %s\n",
+  fmt::printf("PHASE 1 GATE  : %s\n",
                 s.overruns == 0 ? "PASS" : "FAIL - see docs/04-roadmap.md");
 }
 
@@ -106,10 +108,10 @@ void cmdTof() {
   for (uint8_t i = 0; i < tof::kCount; ++i) {
     const tof::Index idx = static_cast<tof::Index>(i);
     if (!tof::present(idx)) {
-      Serial.printf("%-6s: absent\n", tof::name(idx));
+      fmt::printf("%-6s: absent\n", tof::name(idx));
       continue;
     }
-    Serial.printf("%-6s: %u mm  (age %lu ms%s)\n", tof::name(idx),
+    fmt::printf("%-6s: %u mm  (age %lu ms%s)\n", tof::name(idx),
                   tof::rangeMm(idx),
                   static_cast<unsigned long>(tof::ageMs(idx)),
                   tof::fresh(idx) ? "" : ", STALE");
@@ -121,10 +123,10 @@ void cmdImu() {
     Serial.println(F("imu absent"));
     return;
   }
-  Serial.printf("accel : %+.3f %+.3f %+.3f g\n", imu::accelX(), imu::accelY(),
+  fmt::printf("accel : %+.3f %+.3f %+.3f g\n", imu::accelX(), imu::accelY(),
                 imu::accelZ());
-  Serial.printf("yaw   : %+.1f dps\n", imu::yawRateDps());
-  Serial.printf("shock : %.3f g%s\n", imu::shock(),
+  fmt::printf("yaw   : %+.1f dps\n", imu::yawRateDps());
+  fmt::printf("shock : %.3f g%s\n", imu::shock(),
                 imu::impact() ? "  <-- IMPACT" : "");
 }
 
@@ -138,7 +140,7 @@ void cmdDrive(int argc, char* argv[]) {
     Serial.println(F("refused: distance too small, or safety is latched"));
     return;
   }
-  Serial.printf("driving %.3f m ...\n", metres);
+  fmt::printf("driving %.3f m ...\n", metres);
 }
 
 void cmdCalibrate(int argc, char* argv[]) {
@@ -158,9 +160,9 @@ void cmdCalibrate(int argc, char* argv[]) {
     return;
   }
   const float error = 100.0f * (measured - commanded) / commanded;
-  Serial.printf("commanded %.3f m, measured %.3f m  (error %+.1f %%)\n",
+  fmt::printf("commanded %.3f m, measured %.3f m  (error %+.1f %%)\n",
                 commanded, measured, error);
-  Serial.printf("counts/m %.1f -> %.1f, saved to NVS\n", before,
+  fmt::printf("counts/m %.1f -> %.1f, saved to NVS\n", before,
                 encoders::countsPerMeter());
 }
 
@@ -199,7 +201,7 @@ void dispatch(char* line) {
     motors::brake();
     Serial.println(F("ok"));
   } else if (!strcmp(cmd, "e")) {
-    Serial.printf("L=%ld (%.4f m)  R=%ld (%.4f m)  mean %.4f m\n",
+    fmt::printf("L=%ld (%.4f m)  R=%ld (%.4f m)  mean %.4f m\n",
                   static_cast<long>(encoders::leftCount()), encoders::leftMeters(),
                   static_cast<long>(encoders::rightCount()), encoders::rightMeters(),
                   encoders::meters());
@@ -235,7 +237,7 @@ void dispatch(char* line) {
     control::requestIdle();
     Serial.println(F("safety cleared"));
   } else {
-    Serial.printf("unknown command '%s' - try ?\n", cmd);
+    fmt::printf("unknown command '%s' - try ?\n", cmd);
   }
 }
 
@@ -246,9 +248,7 @@ void begin() { g_len = 0; }
 void printBanner() {
   Serial.println();
   Serial.println(F("tinybot firmware - Phase 1 (hardware bring-up)"));
-  Serial.printf("build %s %s, Arduino core %d.%d.%d\n", __DATE__, __TIME__,
-                ESP_ARDUINO_VERSION_MAJOR, ESP_ARDUINO_VERSION_MINOR,
-                ESP_ARDUINO_VERSION_PATCH);
+  fmt::printf("board %s, build %s %s\n", hal::boardName(), __DATE__, __TIME__);
   Serial.println(F("type ? for commands"));
 }
 

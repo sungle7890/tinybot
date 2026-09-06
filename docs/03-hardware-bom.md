@@ -68,13 +68,17 @@
 | 1 | Romi Chassis Kit (섀시·모터 2개·바퀴·볼캐스터·6×AA 홀더) | Pololu [#3502](https://www.pololu.com/product/3502) | $39.95 | 1 | $39.95 |
 | 2 | Romi Encoder Pair Kit | Pololu [#3542](https://www.pololu.com/product/3542) | $9.95 | 1 | $9.95 |
 | 3 | Motor Driver and Power Distribution Board for Romi | Pololu [#3543](https://www.pololu.com/product/3543) | $34.95 | 1 | $34.95 |
-| 4 | ESP32-S3-DevKitC-1-N8 | DigiKey [15199021](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-S3-DEVKITC-1-N8/15199021) / Mouser / Amazon | ~$15 | 1 | ~$15 |
+| 4 | ~~ESP32-S3-DevKitC-1-N8~~ → **보유 중인 UNO R4 WiFi 사용** | — | $0 | — | **$0** |
 | 5 | VL53L0X ToF 브레이크아웃 | Adafruit [#3317](https://www.adafruit.com/product/3317) | $14.95 | 3 | $44.85 |
 | 6 | MPU-6050 6-DoF IMU | Adafruit [#3886](https://www.adafruit.com/product/3886) | $12.95 | 1 | $12.95 |
 | 7 | Snap-action switch, 18.5 mm 레버 (범퍼) | Pololu [#1405](https://www.pololu.com/product/1405) | $2.37 | 2 | $4.74 |
 | 8 | AA NiMH 충전지 (Eneloop 등) + 충전기 | Amazon | ~$30 | 1 | ~$30 |
 | 9 | 점퍼선, 스탠드오프, 만능기판, USB-C 케이블 | Amazon / Adafruit | ~$25 | 1 | ~$25 |
-| | | | | **합계** | **~$218** |
+| | | | | **합계** | **~$203** |
+
+> 4번은 2026-09-05에 빠졌다. 이미 갖고 있는 UNO R4 WiFi로 Phase 1~3을 한다.
+> ESP32-S3는 Phase 4(TinyML)에서 필요해지면 그때 $15에 사면 되고,
+> 펌웨어는 이미 두 보드를 모두 지원한다.
 
 ### 안 2 — 개별 부품 (TB6612FNG)
 

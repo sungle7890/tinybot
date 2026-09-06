@@ -70,13 +70,17 @@ before ordering.
 | 1 | Romi Chassis Kit (chassis, 2 motors, wheels, ball casters, 6×AA holder) | Pololu [#3502](https://www.pololu.com/product/3502) | $39.95 | 1 | $39.95 |
 | 2 | Romi Encoder Pair Kit | Pololu [#3542](https://www.pololu.com/product/3542) | $9.95 | 1 | $9.95 |
 | 3 | Motor Driver and Power Distribution Board for Romi | Pololu [#3543](https://www.pololu.com/product/3543) | $34.95 | 1 | $34.95 |
-| 4 | ESP32-S3-DevKitC-1-N8 | DigiKey [15199021](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-S3-DEVKITC-1-N8/15199021) / Mouser / Amazon | ~$15 | 1 | ~$15 |
+| 4 | ~~ESP32-S3-DevKitC-1-N8~~ → **use the UNO R4 WiFi already on hand** | — | $0 | — | **$0** |
 | 5 | VL53L0X ToF breakout | Adafruit [#3317](https://www.adafruit.com/product/3317) | $14.95 | 3 | $44.85 |
 | 6 | MPU-6050 6-DoF IMU | Adafruit [#3886](https://www.adafruit.com/product/3886) | $12.95 | 1 | $12.95 |
 | 7 | Snap-action switch, 18.5 mm lever (bumpers) | Pololu [#1405](https://www.pololu.com/product/1405) | $2.37 | 2 | $4.74 |
 | 8 | AA NiMH cells (Eneloop or similar) + charger | Amazon | ~$30 | 1 | ~$30 |
 | 9 | Jumper wires, standoffs, perfboard, USB-C cable | Amazon / Adafruit | ~$25 | 1 | ~$25 |
-| | | | | **Total** | **~$218** |
+| | | | | **Total** | **~$203** |
+
+> Line 4 dropped on 2026-09-05: phases 1–3 run on the UNO R4 WiFi already owned.
+> Buy the ESP32-S3 for $15 if and when Phase 4 (TinyML) needs it — the firmware
+> already supports both boards.
 
 ### Option 2 — discrete parts (TB6612FNG)
 
