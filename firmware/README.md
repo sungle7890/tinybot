@@ -133,7 +133,7 @@ j
 | `kDutyDeadband` = 120 | `include/config.h` | 섀시마다 다름. 3단계에서 확인 |
 | `kDefaultCountsPerMeter` = 3000 | `include/config.h` | 순수 자리표시자. `cal`로 덮어쓸 것 |
 | `kHeadingKp` = 1.2 | `include/config.h` | 진동하면 낮출 것 |
-| IMU 충돌 임계값 0.6 g | `src/sense/imu.cpp` | 실제 충돌 데이터로 조정 |
+| IMU 충돌 임계값 0.6 g | `src/sense/imu.cpp` | 책상 톡 시험에서 최대 68 mg만 기록 — 7단계 실제 충돌로 조정. [bringup-log](../hardware/bringup-log.md) |
 | 우측 엔코더 부호 반전 | `src/drive/encoders.cpp` | 4번 단계에서 확인 |
 | R4 루프 지터 | `src/hal/hal_r4.cpp` | **1차 실측 PASS** (2026-09-15, 거리센서 1개·모터 없음·텔레메트리 켬, 60초): 20000.0 ± 2.3 µs, 최소/최대 19995/20005 µs, 초과 0. 센서 전체와 모터를 붙인 뒤 7단계에서 다시 잴 것 |
 | **R4 PWM 주파수** | `src/hal/hal_r4.cpp` | R4 코어가 주파수 제어를 노출하지 않아 가청 대역. 모터 소음 예상 |

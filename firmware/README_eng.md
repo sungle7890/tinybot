@@ -141,7 +141,7 @@ expected. These in particular are **guesses** until measured.
 | `kDutyDeadband` = 120 | `include/config.h` | Chassis-specific; confirm in step 3 |
 | `kDefaultCountsPerMeter` = 3000 | `include/config.h` | Pure placeholder; `cal` overwrites it |
 | `kHeadingKp` = 1.2 | `include/config.h` | Lower it if the drive oscillates |
-| IMU impact threshold 0.6 g | `src/sense/imu.cpp` | Tune against a real collision |
+| IMU impact threshold 0.6 g | `src/sense/imu.cpp` | Desk taps peaked at only 68 mg — tune against a real collision at stage 7. See [bringup-log](../hardware/bringup-log_eng.md) |
 | Right encoder sign flip | `src/drive/encoders.cpp` | Confirm in step 4 |
 | R4 loop jitter | `src/hal/hal_r4.cpp` | **First measurement PASS** (2026-09-15, one distance sensor, no motors, telemetry on, 60 s): 20000.0 ± 2.3 µs, min/max 19995/20005 µs, 0 overruns. Re-measure at stage 7 with every sensor and the motors attached |
 | **R4 PWM frequency** | `src/hal/hal_r4.cpp` | The R4 core exposes no frequency control, so the carrier is audible. Expect motor whine |
