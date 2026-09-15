@@ -65,18 +65,15 @@ A0/A1/A2.
 
 ## Power (R4 WiFi)
 
-The R4 accepts 6–24 V on the barrel jack and regulates 5 V/3.3 V onboard.
-
 ```
-2x 18650 (7.4 V)
-   ├─→ TB6612FNG VM         (motors)
-   └─→ R4 VIN or barrel jack (logic)
-Grounds tied together
+Romi 6×AA NiMH (7.2 V) ─→ #3541 power board (reverse protection + switch)
+                              └─ VSW ─┬─→ TB6612FNG VM   (motors)
+                                      └─→ R4 VIN         (logic; the R4 regulates)
+R4 5V ─→ TB6612 VCC, encoder VCC (3.5 V minimum, so not 3.3 V)
+All grounds common
 ```
 
-Logic is 5 V, so it drives the TB6612FNG (2.7–5.5 V logic) directly. The
-Adafruit ToF/IMU boards are level-shifted and 5 V safe too — but **on Qwiic they
-run at 3.3 V.**
+Full connection table and build order: **[assembly_eng.md](assembly_eng.md)**.
 
 > **⚠️ Do not power motors from the R4's 5 V pin**, for the same reason given in
 > the power section below.
