@@ -19,10 +19,29 @@ the order is to narrow "which stage broke it" when something goes wrong.
 
 ## Stage 1 — sensors only (USB power, no battery, no motors)
 
-### Soldering
-Solder the included headers onto all three VL53L0X boards. Only `SHDN` is
-strictly needed, but the full header holds the board mechanically.
-The MPU-6050 uses Qwiic only; no soldering.
+### Soldering — header pins on the distance sensors (VL53L0X)
+
+Solder a header (a black plastic strip holding a row of metal pins) into the seven
+holes along the edge of each time-of-flight sensor (VL53L0X · Adafruit 3317), so a
+jumper can plug onto `SHDN`. Same job on all three. The IMU (MPU-6050) uses Qwiic
+only and needs none. The build manual page has the illustrated version.
+
+- **Orientation**: plastic **under** the board, short pin ends poking **up** through it, laser window facing up. The long ends point down and take the jumper
+- **Holding**: push the long ends into a breadboard and rest the board on top (masking tape if no breadboard)
+- **Iron**: about 330–350 °C leaded, 350–380 °C lead-free; wipe the tip first
+
+1. Solder one end pin only — tip on **pin and pad together** for 1–2 s, touch solder to the joint from the other side, remove solder, then iron
+2. Check the header is square; if it leans, re-melt that pin and straighten it
+3. The opposite end pin, then the five in between
+4. All seven should be small shiny cones with no bridges to neighbours
+5. Pull the board straight up out of the breadboard
+
+⚠️ Do not heat one pin for more than 3 s (the pad can lift). Keep solder and flux off
+the laser window. Whether a header ships in the bag is unconfirmed — if not, snap seven
+pins off a 2.54 mm header strip. Depending on revision, `SHDN` may be printed `XSHUT`.
+
+**Jumpers**: male-to-female. Female end on the sensor's `SHDN`, male end into R4
+A0/A1/A2. Leave the other six pins empty.
 
 ### Wiring
 
