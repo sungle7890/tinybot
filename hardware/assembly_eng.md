@@ -98,7 +98,18 @@ Set the disc on a flat surface and **press the motor down onto it** until the
 shaft tip touches the surface.
 
 ### Encoder board's six pins
-`M1` `M2` `VCC` `GND` `A` `B` — solder wires or a header here.
+`M1` `M2` `VCC` `GND` `A` `B` — solder wires or a header here. **Connect nothing at this stage.**
+
+| Pin | Left encoder → | Right encoder → |
+|---|---|---|
+| `M1` | motor driver (TB6612FNG) `AO1` | motor driver (TB6612FNG) `BO1` |
+| `M2` | motor driver (TB6612FNG) `AO2` | motor driver (TB6612FNG) `BO2` |
+| `VCC` | R4 `5V` | R4 `5V` |
+| `GND` | common GND | common GND |
+| `A` | R4 `D2` | R4 `D3` |
+| `B` | R4 `D4` | R4 `D12` |
+
+`M1`/`M2` go to the motor driver, not the R4. The middle of `AO1` is the **letter O** (Output), unrelated to the R4's `A0`.
 
 > **⚠️ Two encoder facts**
 > - **VCC is 3.5 V minimum.** The 3.3 V rail will not do → use R4 **5 V**
