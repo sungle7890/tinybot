@@ -27,7 +27,7 @@
 #include "sense/tof.h"
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(cfg::kSerialBaud);
   delay(200);
 
   console::begin();

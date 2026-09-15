@@ -53,6 +53,13 @@ void controlLoopBegin(void (*step)(), uint32_t hz);
 // Call from loop(). A no-op where the loop runs as its own task.
 void controlLoopService();
 
+// --- Serial -----------------------------------------------------------------
+// True when writing `len` bytes to Serial now cannot delay the next control
+// tick. The boards need different answers: the ESP32's Serial buffers and
+// reports free space, while the Renesas UART blocks in write() until every
+// byte is on the wire and does not implement availableForWrite() at all.
+bool serialWriteFitsBeforeNextTick(size_t len);
+
 // --- Misc -------------------------------------------------------------------
 uint32_t freeBytes();
 const char* boardName();

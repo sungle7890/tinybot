@@ -85,3 +85,4 @@ debugging.
 | 2026-09-05 | I2C on **Qwiic (Wire1, 3.3 V)** | It uses no header pins, freeing A4/A5, which is what makes the pin map fit. The Adafruit sensors are STEMMA QT, so no soldering either |
 | 2026-09-05 | R4 control loop is **cooperatively scheduled** off `micros()` | Avoids FspTimer API risk. The `j` command is the arbiter of real jitter; missing the budget is fixable inside `hal_r4.cpp` alone |
 | 2026-09-05 | Power board changed **#3543 → #3541 + TB6612** | The R4 regulates 6–24 V on VIN itself, so #3543's 2 A regulator is redundant. #3541 handles power only, keeping the TB6612 and leaving firmware and pin map untouched. Saves $15 |
+| 2026-09-15 | R4 uploads via **pyOCD (CMSIS-DAP)** | bossac is x86_64-only and will not run on Apple Silicon; OpenOCD has no RA4M1 flash driver. pyOCD with Renesas' pack writes by sector from 0x4000, keeping the bootloader. The factory demo sketch was overwritten without a backup (user's call) |

@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "config.h"
+#include "hal/hal.h"
 #include "hal/ring_buffer.h"
 
 namespace telemetry {
@@ -40,10 +41,9 @@ void printHeader() {
                    "shock_mg,yaw_dps,mode,safety"));
 }
 
-// Writes only when the UART buffer can take the whole line without blocking.
-// A blocking write here would stall loop(), and on the R4 loop() is what drives
-// the control tick - dropping a telemetry line is much cheaper than slipping a
-// control period.
+// Writes only when the line cannot delay the next control tick. On the R4,
+// loop() drives the tick and Serial.write() blocks until the line is sent, so
+// the only safe time to print is when enough of the period is left.
 bool printSample(const Sample& s) {
   char line[cfg::kTelemetryLineMax];
   const int len =
@@ -55,7 +55,7 @@ bool printSample(const Sample& s) {
                s.shockMilliG, s.yawRateDps, s.mode, s.safetyReason);
   if (len <= 0) return false;
 
-  if (Serial.availableForWrite() < len) {
+  if (!hal::serialWriteFitsBeforeNextTick(static_cast<size_t>(len))) {
     ++g_dropped;
     return false;
   }

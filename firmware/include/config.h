@@ -51,6 +51,9 @@ constexpr uint16_t kTofOutOfRangeMm   = 8190;   // VL53L0X saturation value
 // rather than as "nothing in front of me".
 constexpr uint32_t kSensorStaleMs = 200;
 
+// --- Serial -----------------------------------------------------------------
+constexpr unsigned long kSerialBaud = 115200;
+
 // --- Telemetry --------------------------------------------------------------
 constexpr size_t kTelemetryQueueLen = 32;
 constexpr size_t kTelemetryLineMax  = 128;

@@ -25,6 +25,16 @@ pio device monitor           # 콘솔 (115200)
 > macOS x86_64 바이너리뿐이라 `Bad CPU type in executable`로 죽는다.
 > `platformio.ini`에서 arm64 빌드가 있는 `~1.100301.0`으로 고정해뒀다.
 
+> **⚠️ R4 업로드는 pyOCD로 한다 (최초 1회 설정).** 기본 업로드 도구 bossac도
+> x86_64 전용이라 Rosetta 없이는 실행되지 않고, OpenOCD는 RA4M1 플래시 드라이버가
+> 없다. 보드 내장 CMSIS-DAP 디버거와 pyOCD + Renesas 팩으로 올린다.
+> ```bash
+> uv tool install pyocd
+> pyocd pack install r7fa4m1ab
+> ```
+> 이후 `pio run -t upload`가 `0x4000`부터 섹터 단위로만 지우고 쓴다. 부트로더
+> (`0x0000`~`0x3FFF`)와 EEPROM(데이터 플래시)은 건드리지 않는다. 2026-09-15 실기 확인.
+
 ## 실행 모델
 
 | | UNO R4 WiFi | ESP32-S3 |
@@ -125,6 +135,6 @@ j
 | `kHeadingKp` = 1.2 | `include/config.h` | 진동하면 낮출 것 |
 | IMU 충돌 임계값 0.6 g | `src/sense/imu.cpp` | 실제 충돌 데이터로 조정 |
 | 우측 엔코더 부호 반전 | `src/drive/encoders.cpp` | 4번 단계에서 확인 |
-| **R4 루프 지터** | `src/hal/hal_r4.cpp` | 협조적 스케줄링. `j`로 실측 필요 |
+| R4 루프 지터 | `src/hal/hal_r4.cpp` | **1차 실측 PASS** (2026-09-15, 거리센서 1개·모터 없음·텔레메트리 켬, 60초): 20000.0 ± 2.3 µs, 최소/최대 19995/20005 µs, 초과 0. 센서 전체와 모터를 붙인 뒤 7단계에서 다시 잴 것 |
 | **R4 PWM 주파수** | `src/hal/hal_r4.cpp` | R4 코어가 주파수 제어를 노출하지 않아 가청 대역. 모터 소음 예상 |
 | R4 인터럽트 핀 D2/D3 | `include/pins_r4.h` | 공식 문서 기준. 실측 확인 |

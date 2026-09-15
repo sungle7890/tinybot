@@ -21,7 +21,7 @@ Advancing on "seems to work" turns into an untraceable bug later.
 > [../firmware/README_eng.md](../firmware/README_eng.md).
 
 - [x] PlatformIO project, build pipeline (`pio run` succeeds)
-- [ ] Upload verified
+- [x] Upload verified (pyOCD, 2026-09-15)
 - [ ] Motors driven both directions with PWM speed control
 - [ ] Encoder counts read and converted to real distance (mm)
 - [ ] Three ToF sensors running together (I2C address reassignment)

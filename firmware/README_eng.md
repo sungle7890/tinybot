@@ -27,6 +27,18 @@ pio device monitor           # console at 115200
 > `platformio.ini` pins `~1.100301.0`, the oldest release with a darwin_arm64
 > build.
 
+> **⚠️ R4 uploads go through pyOCD (one-time setup).** The default uploader,
+> bossac, is also x86_64-only and will not run without Rosetta, and OpenOCD has
+> no RA4M1 flash driver. Upload instead through the board's onboard CMSIS-DAP
+> probe with pyOCD and Renesas' pack:
+> ```bash
+> uv tool install pyocd
+> pyocd pack install r7fa4m1ab
+> ```
+> After that, `pio run -t upload` erases and writes by sector from `0x4000`
+> only, leaving the bootloader (`0x0000`–`0x3FFF`) and the EEPROM data flash
+> untouched. Verified on hardware 2026-09-15.
+
 ## Execution model
 
 | | UNO R4 WiFi | ESP32-S3 |
@@ -131,6 +143,6 @@ expected. These in particular are **guesses** until measured.
 | `kHeadingKp` = 1.2 | `include/config.h` | Lower it if the drive oscillates |
 | IMU impact threshold 0.6 g | `src/sense/imu.cpp` | Tune against a real collision |
 | Right encoder sign flip | `src/drive/encoders.cpp` | Confirm in step 4 |
-| **R4 loop jitter** | `src/hal/hal_r4.cpp` | Cooperative scheduling; measure with `j` |
+| R4 loop jitter | `src/hal/hal_r4.cpp` | **First measurement PASS** (2026-09-15, one distance sensor, no motors, telemetry on, 60 s): 20000.0 ± 2.3 µs, min/max 19995/20005 µs, 0 overruns. Re-measure at stage 7 with every sensor and the motors attached |
 | **R4 PWM frequency** | `src/hal/hal_r4.cpp` | The R4 core exposes no frequency control, so the carrier is audible. Expect motor whine |
 | R4 interrupt pins D2/D3 | `include/pins_r4.h` | Per official docs; verify on hardware |

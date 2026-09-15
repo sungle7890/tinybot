@@ -15,6 +15,10 @@ namespace {
 
 constexpr int kEepromBase = 0;
 
+// Leave this much of the period untouched after a write, so a line that
+// finishes late still does not push the tick past its jitter budget.
+constexpr uint32_t kSerialMarginUs = 2500;
+
 void (*g_step)() = nullptr;
 uint32_t g_periodUs = 0;
 uint32_t g_nextDueUs = 0;
@@ -103,6 +107,18 @@ void controlLoopService() {
   if (static_cast<int32_t>(micros() - g_nextDueUs) > 0) {
     g_nextDueUs = micros() + g_periodUs;
   }
+}
+
+// --- Serial -----------------------------------------------------------------
+// UART::write() busy-waits until the last byte is sent, so a write costs its
+// full transmission time: 10 bits per byte (start, 8 data, stop). Allow it only
+// when that time, plus a margin, fits before the next tick is due.
+bool serialWriteFitsBeforeNextTick(size_t len) {
+  if (!g_running) return true;
+  const uint32_t writeUs =
+      static_cast<uint32_t>(len) * 10ul * 1000000ul / cfg::kSerialBaud;
+  const int32_t remainingUs = static_cast<int32_t>(g_nextDueUs - micros());
+  return remainingUs > static_cast<int32_t>(writeUs + kSerialMarginUs);
 }
 
 // --- Misc -------------------------------------------------------------------

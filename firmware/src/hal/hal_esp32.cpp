@@ -97,6 +97,12 @@ void controlLoopBegin(void (*step)(), uint32_t hz) {
 // The task runs on its own core; loop() has nothing to do for it.
 void controlLoopService() {}
 
+// The control loop runs on the other core, so the only thing to avoid is
+// blocking loop() itself on a full buffer.
+bool serialWriteFitsBeforeNextTick(size_t len) {
+  return Serial.availableForWrite() >= static_cast<int>(len);
+}
+
 uint32_t freeBytes() { return ESP.getFreeHeap(); }
 
 const char* boardName() { return "ESP32-S3"; }
