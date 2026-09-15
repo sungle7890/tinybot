@@ -214,7 +214,7 @@ $15 cheaper, and no work.
 
 Adafruit's ToF boards ship with headers loose, not soldered. All three VL53L0X
 boot at 0x29, so readdressing needs **individual control of XSHUT** (labelled
-`SHDN` on these boards). At minimum that one pin must be soldered per board.
+`XSHUT` on the current board revision; older docs say `SHDN`). At minimum that one pin must be soldered per board.
 
 A Qwiic I2C multiplexer (TCA9548A) would dodge the address clash without
 soldering, but it means rewriting `tof.cpp`, and an iron is needed for the

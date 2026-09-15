@@ -23,7 +23,7 @@ the order is to narrow "which stage broke it" when something goes wrong.
 
 Solder a header (a black plastic strip holding a row of metal pins) into the seven
 holes along the edge of each time-of-flight sensor (VL53L0X · Adafruit 3317), so a
-jumper can plug onto `SHDN`. Same job on all three. The IMU (MPU-6050) uses Qwiic
+jumper can plug onto `XSHUT`. Same job on all three. The IMU (MPU-6050) uses Qwiic
 only and needs none. The build manual page has the illustrated version.
 
 - **Orientation**: plastic **under** the board, short pin ends poking **up** through it, laser window facing up. The long ends point down and take the jumper
@@ -32,25 +32,31 @@ only and needs none. The build manual page has the illustrated version.
 
 1. Solder one end pin only — tip on **pin and pad together** for 1–2 s, touch solder to the joint from the other side, remove solder, then iron
 2. Check the header is square; if it leans, re-melt that pin and straighten it
-3. The opposite end pin, then the five in between
-4. All seven should be small shiny cones with no bridges to neighbours
+3. The opposite end pin, then the four in between
+4. All six should be small shiny cones with no bridges to neighbours
 5. Pull the board straight up out of the breadboard
 
 ⚠️ Do not heat one pin for more than 3 s (the pad can lift). Keep solder and flux off
-the laser window. Whether a header ships in the bag is unconfirmed — if not, snap seven
-pins off a 2.54 mm header strip. Depending on revision, `SHDN` may be printed `XSHUT`.
+the laser window. Whether a header ships in the bag is unconfirmed — if not, snap six
+pins off a 2.54 mm header strip.
 
-**Jumpers**: male-to-female. Female end on the sensor's `SHDN`, male end into R4
-A0/A1/A2. Leave the other six pins empty.
+**Jumpers**: male-to-female. Female end on the sensor's `XSHUT`, male end into R4
+A0/A1/A2. Leave the other five pins empty.
+
+**Pin names**: the boards received (the STEMMA QT revision, July 2020 onward) have six pins: `VIN` `GND` `SCL`
+`SDA` `GPIO` `XSHUT`. The one that looks like `GP10` is `GPIO` (letter O) and is unused. Older documentation calls
+this pin `SHDN` and shows seven pins including `2v8`; Adafruit says the circuit is the same. `XSHUT` is pulled high
+on the board and has a level-shifting diode, so the R4's 5 V drives it safely — which is what the `3-5V` printed on
+the board means. This revision has two STEMMA QT connectors, so the chain works.
 
 ### Wiring
 
 | Connection | How |
 |---|---|
 | R4 Qwiic → VL53L0X → VL53L0X → VL53L0X → MPU-6050 | QT-to-QT cable chain |
-| **Front** VL53L0X `SHDN` → R4 **A0** | jumper |
-| **Left** VL53L0X `SHDN` → R4 **A1** | jumper |
-| **Right** VL53L0X `SHDN` → R4 **A2** | jumper |
+| **Front** VL53L0X `XSHUT` → R4 **A0** | jumper |
+| **Left** VL53L0X `XSHUT` → R4 **A1** | jumper |
+| **Right** VL53L0X `XSHUT` → R4 **A2** | jumper |
 
 Chain order does not matter electrically — addresses follow **XSHUT order**, not
 chain position. **Label each sensor front/left/right** anyway; mixed up later,
@@ -72,8 +78,8 @@ shock spikes on a tap).
 | Symptom | Suspect |
 |---|---|
 | `0/3 ToF`, IMU MISSING | The whole Qwiic chain. Cables fully seated? |
-| `0/3 ToF`, IMU ok | All three SHDN wires, or A0 stuck LOW |
-| `1/3`, `2/3` | The SHDN wire of the missing sensor |
+| `0/3 ToF`, IMU ok | All three XSHUT wires, or A0 stuck LOW |
+| `1/3`, `2/3` | The XSHUT wire of the missing sensor |
 | ToF stuck at 8190 | Normal — out of range. Bring a hand within 20 cm |
 
 **Pass: `3/3 ToF, IMU ok`, and all three sensors respond to a hand.**
