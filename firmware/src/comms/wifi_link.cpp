@@ -34,6 +34,11 @@ namespace {
 constexpr uint32_t kHeadroomUs = 12000;
 constexpr uint32_t kClientTimeoutMs = 15000;
 
+// Asking the modem whether a connection is waiting costs up to 7 ms, and the
+// loop runs thousands of times a second, so polling it freely lands on a tick
+// now and then. Once per this interval is plenty when a round trip is 300 ms.
+constexpr uint32_t kAcceptIntervalMs = 100;
+
 // Round trips over this link cost 100-400 ms, so a client polls slowly and
 // takes a large batch each time rather than asking often.
 constexpr uint8_t kTelemetryBatch = 40;
@@ -51,6 +56,7 @@ String g_out;
 size_t g_outPos = 0;
 uint32_t g_lastTelemetryFetchMs = 0;
 uint32_t g_clientStartedMs = 0;
+uint32_t g_lastAcceptMs = 0;
 bool g_up = false;
 bool g_ap = false;
 bool g_hasClient = false;
@@ -207,6 +213,8 @@ void service() {
   if (g_hasClient && !TIME_CALL(g_maxPollUs, g_client.connected())) closeClient();
 
   if (!g_hasClient) {
+    if (millis() - g_lastAcceptMs < kAcceptIntervalMs) return;
+    g_lastAcceptMs = millis();
     // accept(), not available(): WiFiS3's available() caches the previous
     // client and keeps handing back its closed socket, so the second request
     // of a session never arrives.

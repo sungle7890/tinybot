@@ -14,7 +14,7 @@ Advancing on "seems to work" turns into an untraceable bug later.
 **Exit**: parts on the desk, and a drawing of what plugs in where.
 → Only the order is left.
 
-## Phase 1 — Hardware bring-up ← **current**
+## Phase 1 — Hardware bring-up ✅ complete (2026-09-16)
 
 > Firmware is written and compiles. Every item below is a **hardware
 > verification** item and cannot be checked until parts arrive. Procedure:
@@ -22,11 +22,11 @@ Advancing on "seems to work" turns into an untraceable bug later.
 
 - [x] PlatformIO project, build pipeline (`pio run` succeeds)
 - [x] Upload verified (pyOCD, 2026-09-15)
-- [ ] Motors driven both directions with PWM speed control
-- [ ] Encoder counts read and converted to real distance (mm)
-- [ ] Three ToF sensors running together (I2C address reassignment)
-- [ ] IMU readout
-- [ ] Fixed-rate 50 Hz loop, with measured jitter recorded
+- [x] Motors driven both directions with PWM speed control
+- [x] Encoder counts read and converted to real distance (mm)
+- [x] Three ToF sensors running together (I2C address reassignment)
+- [x] IMU readout
+- [x] Fixed-rate 50 Hz loop, with measured jitter recorded
 
 **Exit**: commanding 1 m straight lands within ±5 % measured.
 Loop jitter within ±2 ms of the 50 Hz period.
@@ -34,7 +34,7 @@ Loop jitter within ±2 ms of the 50 Hz period.
 > If odometry is inaccurate here, every phase-3 reward becomes a lie.
 > This is the one phase not to rush.
 
-## Phase 2 — Rule-based autonomy
+## Phase 2 — Rule-based autonomy ← **current**
 
 - [ ] Obstacle avoidance via Braitenberg / subsumption
 - [ ] Hard-interrupt safety stop on bumpers and cliff sensors

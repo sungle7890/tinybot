@@ -96,4 +96,41 @@ take the sensor I2C reads out of it, so blocking in loop() cannot delay a tick.
 - All telemetry dropped: the Renesas UART's `availableForWrite()` always returns 0 → decide by time left before the next tick
 - Default uploader bossac is x86_64-only → pyOCD
 
-**Stage 1 passed.** All four sensors and both bumpers verified. Next is stage 2, motors and encoders.
+**Stage 1 passed.** All four sensors and both bumpers verified.
+
+## 2026-09-16 — Phase 1 complete (motors, encoders, gates)
+
+### Motors and encoders
+- Both directions and duty control work. The pack is 9 V against motors rated
+  3-6 V, so a **duty ceiling of 666/1000** now caps every command
+- Getting the encoder signs right took several attempts: each time the wiring was
+  touched, one side died or flipped. **The jumper contacts are vibration-prone.**
+  Swapping the right encoder's `A`/`B` finally gave both sides positive
+- A dead encoder mid-drive once **made the robot drive away**: the firmware
+  believed the bad reading and kept commanding forward. Guards added (375acea)
+
+### Gate ① odometry calibration — ✅ PASS
+```
+commanded 1.000 m, measured 1.016 m (40 in), error +1.6%
+counts/m 3274.0 -> 3222.4, saved to EEPROM
+```
+The figure derived from the datasheet was within 1.6% of reality.
+
+### Gate ② control-loop jitter — ✅ PASS
+Motors and encoders attached, Wi-Fi up, telemetry over USB for 60 s:
+```
+mean 20000.6 ± 30.8 µs · min/max 19989/21676 · overruns 0 · 2945 telemetry lines
+```
+
+It first measured 6 overruns at ±486 µs. The cause was not the motors but
+**polling the radio for waiting connections**, one call of which costs up to
+6.8 ms. Limiting that poll to once per 100 ms took overruns to zero and the
+deviation from 486 to 31 µs.
+
+### Open problem: it curves right
+The 1 m run ended **about 10 cm to the right** (~5.7°), while the encoders
+disagreed by only 0.2%. Today's heading hold equalises wheel counts, so it
+cannot see this: unequal effective wheel diameter, slip, or caster drag. The fix
+is **heading correction from the gyro**, kept for Phase 2.
+
+**Phase 1 complete.**
