@@ -97,6 +97,9 @@ void controlLoopBegin(void (*step)(), uint32_t hz) {
 // The task runs on its own core; loop() has nothing to do for it.
 void controlLoopService() {}
 
+// Nothing in loop() can delay a tick on the other core.
+uint32_t microsUntilNextTick() { return UINT32_MAX; }
+
 // The control loop runs on the other core, so the only thing to avoid is
 // blocking loop() itself on a full buffer.
 bool serialWriteFitsBeforeNextTick(size_t len) {

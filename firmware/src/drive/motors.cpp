@@ -20,9 +20,11 @@ int16_t applyDeadband(int16_t duty) {
   return duty > 0 ? corrected : static_cast<int16_t>(-corrected);
 }
 
+// Clamps to the ceiling rather than the full API range, so a command of 1000
+// cannot put more than cfg::kMotorMaxVolts across the motors.
 int16_t clampDuty(int16_t duty) {
-  if (duty > cfg::kDutyMax) return cfg::kDutyMax;
-  if (duty < -cfg::kDutyMax) return -cfg::kDutyMax;
+  if (duty > cfg::kDutyCeiling) return cfg::kDutyCeiling;
+  if (duty < -cfg::kDutyCeiling) return -cfg::kDutyCeiling;
   return duty;
 }
 
@@ -78,6 +80,9 @@ void coast() {
   hal::pwmWrite(pins::kRightPwm, 0, cfg::kDutyMax);
 }
 
+// Short brake: both inputs high shorts the motor windings together, so the
+// full PWM value here is not a voltage across the motors and the ceiling does
+// not apply.
 void brake() {
   g_leftDuty = 0;
   g_rightDuty = 0;

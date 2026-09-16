@@ -17,6 +17,7 @@
 #include "comms/console.h"
 #include "comms/fmt.h"
 #include "comms/telemetry.h"
+#include "comms/wifi_link.h"
 #include "config.h"
 #include "control/control_loop.h"
 #include "drive/encoders.h"
@@ -53,6 +54,16 @@ void setup() {
   }
   Serial.println();
 
+  // Before the control loop starts: joining a network can take seconds, and a
+  // loop already ticking would record that wait as one enormous overrun.
+  if (wifi_link::begin()) {
+    fmt::printf("wifi          : %s at http://%s\n",
+                wifi_link::isAccessPoint() ? "own network (tinybot)" : "joined",
+                wifi_link::ipAddress());
+  } else {
+    fmt::printf("wifi          : off (no secrets.h, or the join failed)\n");
+  }
+
   control::begin();
   console::printStatus();
 }
@@ -63,9 +74,12 @@ void loop() {
   hal::controlLoopService();
 
   console::poll();
+  wifi_link::service();
 
-  telemetry::Sample sample;
-  if (telemetry::pop(sample)) {
-    telemetry::printSample(sample);
+  // Only one consumer may drain the queue, or they split the samples between
+  // them and each sees a fraction of the stream.
+  if (!wifi_link::streamingTelemetry()) {
+    telemetry::Sample sample;
+    if (telemetry::pop(sample)) telemetry::printSample(sample);
   }
 }

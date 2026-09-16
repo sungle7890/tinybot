@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 
 // One record per control tick, handed from the control step to the console
@@ -37,6 +38,9 @@ void setEnabled(bool on);
 bool enabled();
 
 void printHeader();
+
+// Formats one sample as the CSV line used everywhere. Returns its length.
+int formatSample(const Sample& sample, char* out, size_t len);
 // Non-blocking: skips (and counts) the line if the UART buffer is too full.
 bool printSample(const Sample& sample);
 

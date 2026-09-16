@@ -121,6 +121,12 @@ bool serialWriteFitsBeforeNextTick(size_t len) {
   return remainingUs > static_cast<int32_t>(writeUs + kSerialMarginUs);
 }
 
+uint32_t microsUntilNextTick() {
+  if (!g_running) return UINT32_MAX;
+  const int32_t remaining = static_cast<int32_t>(g_nextDueUs - micros());
+  return remaining > 0 ? static_cast<uint32_t>(remaining) : 0;
+}
+
 // --- Misc -------------------------------------------------------------------
 uint32_t freeBytes() {
   // The RA4M1 core exposes no heap-walk API. The gap between the top of the

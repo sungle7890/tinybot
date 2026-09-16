@@ -64,6 +64,33 @@ fully home.**
 
 Not yet re-measured with the IMU added. Final measurement at stage 7 with motors attached.
 
+### Wi-Fi link (2026-09-16)
+
+Commands and telemetry now go over HTTP through the R4's onboard radio. It joins
+the house network, answers 6/6 consecutive requests, and responds in 130-630 ms.
+
+**Each call into the radio costs 7-17 ms** (measured with the `net` command):
+
+| Call | Worst |
+|---|---|
+| accept | 6.8 ms |
+| connected/available | 11.8 ms |
+| read | 13.8 ms |
+| write 128 B | 16.6 ms |
+
+With a 20 ms control period on a single core, the ±2 ms budget cannot hold while
+the radio is in use. Measured while streaming telemetry: 20491 ± 3972 µs, max
+48 ms, **225 of 2928 ticks over budget - FAIL**. Chunked writes and bulk reads
+barely moved it (230 → 225).
+
+**What this affects**
+- A handful of commands (`d 1000`, `e`, `st`) is fine
+- **Encoders count in interrupts, so calibration accuracy is unaffected by jitter**
+- Continuous telemetry streaming keeps pushing the loop late
+
+**Real fix (Phase 2)**: move the control step into a hardware timer interrupt and
+take the sensor I2C reads out of it, so blocking in loop() cannot delay a tick.
+
 ### Found and fixed
 - `%f` printed blank on the R4 → `-Wl,-u,_printf_float`
 - All telemetry dropped: the Renesas UART's `availableForWrite()` always returns 0 → decide by time left before the next tick

@@ -44,15 +44,19 @@ void printHeader() {
 // Writes only when the line cannot delay the next control tick. On the R4,
 // loop() drives the tick and Serial.write() blocks until the line is sent, so
 // the only safe time to print is when enough of the period is left.
+int formatSample(const Sample& s, char* out, size_t len) {
+  return snprintf(out, len,
+                  "%lu,%lu,%ld,%ld,%u,%u,%u,%d,%d,%d,%d,%u,%u\n",
+                  static_cast<unsigned long>(s.seq),
+                  static_cast<unsigned long>(s.tickUs),
+                  static_cast<long>(s.encLeft), static_cast<long>(s.encRight),
+                  s.tofFront, s.tofLeft, s.tofRight, s.dutyLeft, s.dutyRight,
+                  s.shockMilliG, s.yawRateDps, s.mode, s.safetyReason);
+}
+
 bool printSample(const Sample& s) {
   char line[cfg::kTelemetryLineMax];
-  const int len =
-      snprintf(line, sizeof(line), "%lu,%lu,%ld,%ld,%u,%u,%u,%d,%d,%d,%d,%u,%u\n",
-               static_cast<unsigned long>(s.seq),
-               static_cast<unsigned long>(s.tickUs),
-               static_cast<long>(s.encLeft), static_cast<long>(s.encRight),
-               s.tofFront, s.tofLeft, s.tofRight, s.dutyLeft, s.dutyRight,
-               s.shockMilliG, s.yawRateDps, s.mode, s.safetyReason);
+  const int len = formatSample(s, line, sizeof(line));
   if (len <= 0) return false;
 
   if (!hal::serialWriteFitsBeforeNextTick(static_cast<size_t>(len))) {

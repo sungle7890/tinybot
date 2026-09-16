@@ -21,3 +21,6 @@ checkpoints/
 .DS_Store
 .vscode/
 .idea/
+
+# credentials stay on this machine
+firmware/include/secrets.h

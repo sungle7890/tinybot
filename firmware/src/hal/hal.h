@@ -53,6 +53,10 @@ void controlLoopBegin(void (*step)(), uint32_t hz);
 // Call from loop(). A no-op where the loop runs as its own task.
 void controlLoopService();
 
+// Microseconds left before the next tick is due. Work that could overrun the
+// budget checks this first. Effectively unlimited where the loop is a task.
+uint32_t microsUntilNextTick();
+
 // --- Serial -----------------------------------------------------------------
 // True when writing `len` bytes to Serial now cannot delay the next control
 // tick. The boards need different answers: the ESP32's Serial buffers and

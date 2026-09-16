@@ -24,6 +24,23 @@ constexpr bool kUseQwiic = true;
 // Duty is a platform-independent fraction; hal::pwmWrite hides the resolution.
 constexpr int16_t kDutyMax = 1000;   // public API range is -1000..+1000
 
+// The pack drives the motors directly, so duty sets their average voltage:
+// average = supply x duty. The Romi's 120:1 mini plastic gearmotors (Pololu
+// 1520) are rated 4.5 V and specified to run comfortably over 3-6 V, while six
+// 1.5 V cells give 9 V, so full duty would be half again over the rating -
+// hotter motors, faster brush wear, and a stall current that climbs with it.
+// kDutyCeiling caps every motor command so the average stays within
+// kMotorMaxVolts. Re-measure kSupplyVolts at the driver and it re-derives.
+constexpr float kSupplyVolts = 9.0f;
+constexpr float kMotorMaxVolts = 6.0f;
+
+constexpr int16_t dutyCeilingFor(float supply, float motorMax) {
+  return supply <= motorMax
+             ? kDutyMax
+             : static_cast<int16_t>(static_cast<float>(kDutyMax) * motorMax / supply);
+}
+constexpr int16_t kDutyCeiling = dutyCeilingFor(kSupplyVolts, kMotorMaxVolts);
+
 // Below this the motors whine without turning. Measured per chassis; the
 // default is a starting guess to be corrected during bring-up.
 constexpr int16_t kDutyDeadband = 120;

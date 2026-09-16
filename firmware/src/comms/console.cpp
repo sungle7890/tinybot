@@ -6,6 +6,7 @@
 
 #include "comms/fmt.h"
 #include "comms/telemetry.h"
+#include "comms/wifi_link.h"
 #include "config.h"
 #include "control/control_loop.h"
 #include "hal/hal.h"
@@ -38,7 +39,7 @@ int tokenize(char* line, char* argv[], int maxArgs) {
 }
 
 void printHelp() {
-  Serial.println(F(
+  fmt::println(
       "commands:\n"
       "  ?              this help\n"
       "  st             status\n"
@@ -56,7 +57,8 @@ void printHelp() {
       "  cal <mm>       after `d`, report the measured distance to recalibrate\n"
       "  cpm <value>    set counts-per-metre directly\n"
       "  v              toggle the telemetry stream\n"
-      "  c              clear a latched safety stop"));
+      "  net            wi-fi link counters\n"
+      "  c              clear a latched safety stop");
 }
 
 void cmdStatus() {
@@ -67,6 +69,9 @@ void cmdStatus() {
                 safety::tripped() ? "TRIPPED" : "ok", safety::reason());
   fmt::printf("duty          : L=%d R=%d\n", motors::leftDuty(),
                 motors::rightDuty());
+  fmt::printf("motor cap     : %d / %d  (%.1f V supply, %.1f V max)\n",
+              cfg::kDutyCeiling, cfg::kDutyMax, cfg::kSupplyVolts,
+              cfg::kMotorMaxVolts);
   fmt::printf("encoders      : L=%ld R=%ld  (%.1f counts/m)\n",
                 static_cast<long>(encoders::leftCount()),
                 static_cast<long>(encoders::rightCount()),
@@ -80,6 +85,13 @@ void cmdStatus() {
                 static_cast<unsigned long>(s.ticks),
                 static_cast<unsigned long>(s.overruns),
                 static_cast<unsigned long>(telemetry::dropped()));
+  if (wifi_link::connected()) {
+    fmt::printf("wifi          : %s http://%s\n",
+                wifi_link::isAccessPoint() ? "own network," : "joined,",
+                wifi_link::ipAddress());
+  } else {
+    fmt::printf("wifi          : off\n");
+  }
   fmt::printf("free memory   : %lu bytes\n",
                 static_cast<unsigned long>(hal::freeBytes()));
 }
@@ -87,7 +99,7 @@ void cmdStatus() {
 void cmdJitter() {
   const control::LoopStats s = control::stats();
   if (s.ticks == 0) {
-    Serial.println(F("no ticks recorded yet"));
+    fmt::println("no ticks recorded yet");
     return;
   }
   fmt::printf("period target : %lu us\n",
@@ -120,7 +132,7 @@ void cmdTof() {
 
 void cmdImu() {
   if (!imu::present()) {
-    Serial.println(F("imu absent"));
+    fmt::println("imu absent");
     return;
   }
   fmt::printf("accel : %+.3f %+.3f %+.3f g\n", imu::accelX(), imu::accelY(),
@@ -132,12 +144,12 @@ void cmdImu() {
 
 void cmdDrive(int argc, char* argv[]) {
   if (argc < 2) {
-    Serial.println(F("usage: d <mm>"));
+    fmt::println("usage: d <mm>");
     return;
   }
   const float metres = strtof(argv[1], nullptr) / 1000.0f;
   if (!control::requestDriveDistance(metres)) {
-    Serial.println(F("refused: distance too small, or safety is latched"));
+    fmt::println("refused: distance too small, or safety is latched");
     return;
   }
   fmt::printf("driving %.3f m ...\n", metres);
@@ -145,18 +157,18 @@ void cmdDrive(int argc, char* argv[]) {
 
 void cmdCalibrate(int argc, char* argv[]) {
   if (argc < 2) {
-    Serial.println(F("usage: cal <measured_mm>   (run `d 1000` first)"));
+    fmt::println("usage: cal <measured_mm>   (run `d 1000` first)");
     return;
   }
   const float commanded = control::driveCommandedMeters();
   const float measured = strtof(argv[1], nullptr) / 1000.0f;
   if (!(commanded > 0.0f)) {
-    Serial.println(F("no drive on record - run `d 1000` first"));
+    fmt::println("no drive on record - run `d 1000` first");
     return;
   }
   const float before = encoders::countsPerMeter();
   if (!encoders::calibrateFrom(commanded, measured)) {
-    Serial.println(F("calibration refused: implausible numbers"));
+    fmt::println("calibration refused: implausible numbers");
     return;
   }
   const float error = 100.0f * (measured - commanded) / commanded;
@@ -179,27 +191,27 @@ void dispatch(char* line) {
     cmdStatus();
   } else if (!strcmp(cmd, "m")) {
     if (argc < 3) {
-      Serial.println(F("usage: m <left> <right>"));
+      fmt::println("usage: m <left> <right>");
       return;
     }
     control::requestManual(static_cast<int16_t>(strtol(argv[1], nullptr, 10)),
                            static_cast<int16_t>(strtol(argv[2], nullptr, 10)));
-    Serial.println(F("ok"));
+    fmt::println("ok");
   } else if (!strcmp(cmd, "f")) {
     if (argc < 2) {
-      Serial.println(F("usage: f <duty>"));
+      fmt::println("usage: f <duty>");
       return;
     }
     const int16_t duty = static_cast<int16_t>(strtol(argv[1], nullptr, 10));
     control::requestManual(duty, duty);
-    Serial.println(F("ok"));
+    fmt::println("ok");
   } else if (!strcmp(cmd, "s")) {
     control::requestIdle();
-    Serial.println(F("ok"));
+    fmt::println("ok");
   } else if (!strcmp(cmd, "b")) {
     control::requestManual(0, 0);
     motors::brake();
-    Serial.println(F("ok"));
+    fmt::println("ok");
   } else if (!strcmp(cmd, "e")) {
     fmt::printf("L=%ld (%.4f m)  R=%ld (%.4f m)  mean %.4f m\n",
                   static_cast<long>(encoders::leftCount()), encoders::leftMeters(),
@@ -207,7 +219,7 @@ void dispatch(char* line) {
                   encoders::meters());
   } else if (!strcmp(cmd, "z")) {
     encoders::reset();
-    Serial.println(F("ok"));
+    fmt::println("ok");
   } else if (!strcmp(cmd, "t")) {
     cmdTof();
   } else if (!strcmp(cmd, "i")) {
@@ -216,26 +228,28 @@ void dispatch(char* line) {
     cmdJitter();
   } else if (!strcmp(cmd, "jz")) {
     control::resetStats();
-    Serial.println(F("ok"));
+    fmt::println("ok");
   } else if (!strcmp(cmd, "d")) {
     cmdDrive(argc, argv);
   } else if (!strcmp(cmd, "cal")) {
     cmdCalibrate(argc, argv);
   } else if (!strcmp(cmd, "cpm")) {
     if (argc < 2) {
-      Serial.println(F("usage: cpm <counts_per_metre>"));
+      fmt::println("usage: cpm <counts_per_metre>");
       return;
     }
-    Serial.println(encoders::setCountsPerMeter(strtof(argv[1], nullptr))
-                       ? F("ok")
-                       : F("refused: implausible value"));
+    fmt::println(encoders::setCountsPerMeter(strtof(argv[1], nullptr))
+                     ? "ok"
+                     : "refused: implausible value");
   } else if (!strcmp(cmd, "v")) {
     telemetry::setEnabled(!telemetry::enabled());
-    if (!telemetry::enabled()) Serial.println(F("telemetry off"));
+    if (!telemetry::enabled()) fmt::println("telemetry off");
+  } else if (!strcmp(cmd, "net")) {
+    wifi_link::report(fmt::sink());
   } else if (!strcmp(cmd, "c")) {
     safety::clear();
     control::requestIdle();
-    Serial.println(F("safety cleared"));
+    fmt::println("safety cleared");
   } else {
     fmt::printf("unknown command '%s' - try ?\n", cmd);
   }
@@ -246,13 +260,24 @@ void dispatch(char* line) {
 void begin() { g_len = 0; }
 
 void printBanner() {
-  Serial.println();
-  Serial.println(F("tinybot firmware - Phase 1 (hardware bring-up)"));
+  fmt::println("");
+  fmt::println("tinybot firmware - Phase 1 (hardware bring-up)");
   fmt::printf("board %s, build %s %s\n", hal::boardName(), __DATE__, __TIME__);
-  Serial.println(F("type ? for commands"));
+  fmt::println("type ? for commands");
 }
 
 void printStatus() { cmdStatus(); }
+
+// Runs one console line and sends its reply to `out` instead of the USB
+// console, so the same commands work over the network.
+void execute(const char* line, Print& out) {
+  char buffer[kLineMax];
+  strncpy(buffer, line, sizeof(buffer) - 1);
+  buffer[sizeof(buffer) - 1] = '\0';
+  fmt::setSink(&out);
+  dispatch(buffer);
+  fmt::setSink(nullptr);
+}
 
 void poll() {
   while (Serial.available() > 0) {
