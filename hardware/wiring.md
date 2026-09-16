@@ -48,7 +48,7 @@ Phase 4용으로 남겨둔다.
 
 ## Qwiic 체인
 
-Adafruit VL53L0X(#3317)와 MPU-6050(#3886)은 STEMMA QT 커넥터가 있어
+Adafruit VL53L0X(거리센서(VL53L0X · Adafruit 3317))와 MPU-6050(관성 센서(MPU-6050 · Adafruit 3886))은 STEMMA QT 커넥터가 있어
 Qwiic과 호환된다. **I2C 납땜이 없다.**
 
 ```
@@ -65,7 +65,7 @@ R4 Qwiic ─ VL53L0X(전방) ─ VL53L0X(좌) ─ VL53L0X(우) ─ MPU-6050
 ## 전원 (R4 WiFi)
 
 ```
-Romi 6×AA NiMH (7.2 V) ─→ #3541 전원 보드 (역전압 보호 + 스위치)
+Romi 6×AA NiMH (7.2 V) ─→ 전원 분배 보드(Pololu 3541) (역전압 보호 + 스위치)
                               └─ VSW ─┬─→ TB6612FNG VM   (모터)
                                       └─→ R4 VIN         (로직, R4가 레귤레이션)
 R4 5V ─→ TB6612 VCC, 인코더 VCC (최소 3.5 V라 3.3 V 불가)

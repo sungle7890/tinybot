@@ -48,7 +48,7 @@ Must stay in sync with `firmware/include/pins_r4.h` / `pins_esp32.h`.
 
 ## Qwiic chain
 
-Adafruit VL53L0X (#3317) and MPU-6050 (#3886) carry STEMMA QT connectors, which
+Adafruit VL53L0X (distance sensor (VL53L0X · Adafruit 3317)) and MPU-6050 (IMU (MPU-6050 · Adafruit 3886)) carry STEMMA QT connectors, which
 are Qwiic-compatible. **No I2C soldering.**
 
 ```
@@ -66,7 +66,7 @@ A0/A1/A2.
 ## Power (R4 WiFi)
 
 ```
-Romi 6×AA NiMH (7.2 V) ─→ #3541 power board (reverse protection + switch)
+Romi 6×AA NiMH (7.2 V) ─→ power distribution board (Pololu 3541) (reverse protection + switch)
                               └─ VSW ─┬─→ TB6612FNG VM   (motors)
                                       └─→ R4 VIN         (logic; the R4 regulates)
 R4 5V ─→ TB6612 VCC, encoder VCC (3.5 V minimum, so not 3.3 V)

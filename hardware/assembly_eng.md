@@ -10,9 +10,9 @@ the order is to narrow "which stage broke it" when something goes wrong.
 
 ## Safety rules throughout
 
-- **Power off** whenever rewiring (unplug USB, switch off with the #3541 button)
+- **Power off** whenever rewiring (unplug USB, switch off with the power distribution board (Pololu 3541) button)
 - **Qwiic is 3.3 V only.** 5 V on it destroys the R4
-- Burning smell, a hot part, or the R4 LED going dark → cut power at #3541 now
+- Burning smell, a hot part, or the R4 LED going dark → cut power at power distribution board (Pololu 3541) now
 - First motor run is **with the wheels off the ground**
 
 ---
@@ -125,7 +125,7 @@ Fix them with the Romi motor clips. Fit the wheels.
 ## Stage 3 — chassis and power wiring (no batteries in)
 
 ### Order matters
-1. **Mount the #3541 power board on the chassis first**
+1. **Mount the power distribution board (Pololu 3541) on the chassis first**
 2. **Then solder the four battery contacts** — Pololu says **after** mounting
 3. Fix the TB6612FNG and R4 to the chassis (standoffs or double-sided foam tape.
    Whether the R4's holes line up with the Romi's has not been checked)
@@ -136,9 +136,9 @@ Fix them with the Romi motor clips. Fit the wheels.
 
 | From | To | Note |
 |---|---|---|
-| #3541 `VSW` | TB6612 `VM` | Motor supply, after the switch and reverse protection |
-| #3541 `VSW` | R4 `VIN` | Logic supply; the R4 regulates 5 V/3.3 V |
-| #3541 `GND` | common GND | |
+| power distribution board (Pololu 3541) `VSW` | TB6612 `VM` | Motor supply, after the switch and reverse protection |
+| power distribution board (Pololu 3541) `VSW` | R4 `VIN` | Logic supply; the R4 regulates 5 V/3.3 V |
+| power distribution board (Pololu 3541) `GND` | common GND | |
 | R4 `5V` | TB6612 `VCC` | Driver logic |
 | R4 `5V` | left and right encoder `VCC` | **Not 3.3 V** |
 | R4 `GND` | common GND | **Every GND to one point** |
@@ -198,7 +198,7 @@ across VM–GND** close to the driver anyway, for the Romi motors' inrush.
 | `VSW` ↔ `GND` resistance | hundreds of Ω or more, not 0 Ω | **Short. Do not insert batteries** |
 | R4 `5V` ↔ `GND` resistance | not 0 Ω | Short |
 | Encoder `VCC` reaches 5 V | continuity | Rewire |
-| Battery orientation | matches holder marks | #3541 has reverse protection; do not rely on it |
+| Battery orientation | matches holder marks | power distribution board (Pololu 3541) has reverse protection; do not rely on it |
 
 Insert six **fully charged** NiMH cells; see "Known limits" for why.
 
@@ -207,7 +207,7 @@ Insert six **fully charged** NiMH cells; see "Known limits" for why.
 ## Stage 5 — first power (wheels up)
 
 1. Rest the chassis on a box so **the wheels spin free**
-2. Power on with the #3541 button; check the R4 LED
+2. Power on with the power distribution board (Pololu 3541) button; check the R4 LED
 3. Connect USB, `pio device monitor`
 4. `st` — 3/3 ToF, IMU ok, mode idle
 5. `f 300` → **both wheels turn forward.** If one runs backwards, swap that side's `M1`/`M2` (do not fix it in code)

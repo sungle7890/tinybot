@@ -188,13 +188,13 @@ only, so 6 counts per motor revolution.
 That value is what sits in `cfg::kDefaultCountsPerMeter`.
 **It is a starting point only — calibrate with `cal`.**
 
-### Why #3541 rather than #3543
+### Why power distribution board (Pololu 3541) rather than motor driver and power board (Pololu 3543)
 
-The earlier recommendation was [#3543](https://www.pololu.com/product/3543),
+The earlier recommendation was [motor driver and power board (Pololu 3543)](https://www.pololu.com/product/3543),
 the Motor Driver **and** Power Distribution Board at $34.95. Moving to the R4
 changed the arithmetic.
 
-| | #3543 | **#3541 + TB6612** |
+| | motor driver and power board (Pololu 3543) | **power distribution board (Pololu 3541) + TB6612** |
 |---|---|---|
 | Price | $34.95 | **$19.90** |
 | Motor driver | DRV8838 (DIR+PWM) | TB6612FNG (IN1/IN2+PWM) |
@@ -203,9 +203,9 @@ changed the arithmetic.
 | **Firmware change** | **Required** | **None** |
 
 Two things decide it. **The R4 takes 6–24 V on VIN and regulates 5 V/3.3 V
-itself**, so there is no reason to pay for #3543's regulator. And #3543's
+itself**, so there is no reason to pay for motor driver and power board (Pololu 3543)'s regulator. And motor driver and power board (Pololu 3543)'s
 DRV8838 is DIR+PWM, which would mean rewriting both `motors.cpp` and
-`pins_r4.h`; #3541 handles power only, so the TB6612FNG stays and the code is
+`pins_r4.h`; power distribution board (Pololu 3541) handles power only, so the TB6612FNG stays and the code is
 untouched.
 
 $15 cheaper, and no work.
