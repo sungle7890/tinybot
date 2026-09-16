@@ -54,6 +54,21 @@ constexpr int16_t kDutyDeadband = 120;
 // A computed starting point, not a measurement. Run `cal` and overwrite it.
 constexpr float kDefaultCountsPerMeter = 3274.0f;
 
+// --- Encoder sanity ---------------------------------------------------------
+// The motors top out near 200 rpm at the wheel, which is about 48 counts per
+// 20 ms tick, so anything far above that is noise on a floating input rather
+// than motion - exactly what a disconnected encoder ground produces.
+constexpr int32_t kMaxCountsPerTick = 150;
+
+// Duty applied but nothing turning: either the robot is stalled against
+// something or an encoder signal has come loose. Both want the motors off.
+constexpr uint16_t kStallTicks = 25;          // 0.5 s at 50 Hz
+constexpr int32_t kStallCountsPerTick = 2;
+
+// During a straight drive the wheels track each other closely. This much
+// divergence (about 12 cm) means one side is not being measured.
+constexpr int32_t kDriveMismatchCounts = 400;
+
 // --- Straight-line drive (calibration aid) ----------------------------------
 constexpr int16_t  kDriveDuty      = 400;   // gentle; calibration is not a race
 constexpr float    kHeadingKp      = 1.2f;  // duty per count of L/R divergence

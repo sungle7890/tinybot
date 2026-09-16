@@ -16,6 +16,10 @@ int32_t leftCount();
 int32_t rightCount();
 void reset();
 
+// Bumped by reset(). A watcher comparing counts between ticks uses this to
+// tell a deliberate zeroing from a wire fault: both look like a huge jump.
+uint32_t resetGeneration();
+
 float leftMeters();
 float rightMeters();
 float meters();  // mean of both sides

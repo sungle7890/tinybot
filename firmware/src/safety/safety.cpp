@@ -45,6 +45,8 @@ void poll() {
   if (right) latch(kBumperRight, now);
 }
 
+void raise(uint8_t bit) { latch(bit, millis()); }
+
 bool tripped() { return reason() != kNone; }
 
 uint8_t reason() {

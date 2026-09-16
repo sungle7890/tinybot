@@ -65,8 +65,14 @@ void cmdStatus() {
   const control::LoopStats s = control::stats();
   fmt::printf("mode          : %s\n",
                 control::modeName(control::mode()));
-  fmt::printf("safety        : %s (reason 0x%02X)\n",
-                safety::tripped() ? "TRIPPED" : "ok", safety::reason());
+  const uint8_t reason = safety::reason();
+  char why[64] = "";
+  if (reason & safety::kBumperLeft) strcat(why, " bumper-L");
+  if (reason & safety::kBumperRight) strcat(why, " bumper-R");
+  if (reason & safety::kEncoderFault) strcat(why, " encoder-fault");
+  if (reason & safety::kStalled) strcat(why, " stalled");
+  fmt::printf("safety        : %s (0x%02X)%s\n",
+              reason ? "TRIPPED" : "ok", reason, why);
   fmt::printf("duty          : L=%d R=%d\n", motors::leftDuty(),
                 motors::rightDuty());
   fmt::printf("motor cap     : %d / %d  (%.1f V supply, %.1f V max)\n",

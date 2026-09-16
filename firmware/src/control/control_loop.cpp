@@ -39,6 +39,10 @@ uint32_t g_overruns = 0;
 uint32_t g_lastTickUs = 0;
 uint32_t g_seq = 0;
 
+int32_t g_prevLeft = 0, g_prevRight = 0;
+uint16_t g_stillTicks = 0;
+uint32_t g_seenResetGeneration = 0;
+
 void recordTick(uint32_t periodUs) {
   ++g_ticks;
   if (periodUs < g_minUs) g_minUs = periodUs;
@@ -60,6 +64,49 @@ int16_t clampCorrection(float value) {
   if (value > cfg::kHeadingCorrMax) return cfg::kHeadingCorrMax;
   if (value < -cfg::kHeadingCorrMax) return -cfg::kHeadingCorrMax;
   return static_cast<int16_t>(value);
+}
+
+// Watches the encoders for readings that cannot be real motion, so a loose
+// wire cannot make the robot drive away: a drive that believes it has gone
+// backwards keeps commanding forward until it times out. Faults latch through
+// safety::, which the step below turns into a stop.
+void checkEncoders(int32_t left, int32_t right, Mode mode) {
+  // A zeroing moves the counts by however far the robot had travelled, which
+  // is indistinguishable from a fault by size alone. Re-baseline and skip.
+  const uint32_t generation = encoders::resetGeneration();
+  if (generation != g_seenResetGeneration) {
+    g_seenResetGeneration = generation;
+    g_prevLeft = left;
+    g_prevRight = right;
+    g_stillTicks = 0;
+    return;
+  }
+
+  const int32_t dLeft = left - g_prevLeft;
+  const int32_t dRight = right - g_prevRight;
+  g_prevLeft = left;
+  g_prevRight = right;
+
+  if (abs(dLeft) > cfg::kMaxCountsPerTick || abs(dRight) > cfg::kMaxCountsPerTick) {
+    safety::raise(safety::kEncoderFault);
+    return;
+  }
+
+  const bool driving = (mode == Mode::kManual || mode == Mode::kDriveDistance) &&
+                       (abs(motors::leftDuty()) > cfg::kDutyDeadband ||
+                        abs(motors::rightDuty()) > cfg::kDutyDeadband);
+  if (driving && abs(dLeft) <= cfg::kStallCountsPerTick &&
+      abs(dRight) <= cfg::kStallCountsPerTick) {
+    if (++g_stillTicks >= cfg::kStallTicks) safety::raise(safety::kStalled);
+  } else {
+    g_stillTicks = 0;
+  }
+
+  // Only meaningful while driving straight; a turn diverges on purpose.
+  if (mode == Mode::kDriveDistance &&
+      abs(left - right) > cfg::kDriveMismatchCounts) {
+    safety::raise(safety::kEncoderFault);
+  }
 }
 
 // Ends a drive. Separate so the mode write is the only thing under the lock.
@@ -104,6 +151,7 @@ void step() {
   g_lastTickUs = nowUs;
 
   safety::poll();
+  checkEncoders(encoders::leftCount(), encoders::rightCount(), mode());
   tof::update();
   imu::update();
 

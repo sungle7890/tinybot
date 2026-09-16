@@ -22,6 +22,7 @@ volatile int32_t g_leftCount = 0;
 volatile int32_t g_rightCount = 0;
 
 float g_countsPerMeter = cfg::kDefaultCountsPerMeter;
+uint32_t g_resetGeneration = 0;
 
 void HAL_ISR onLeftEdge() {
   const int delta =
@@ -71,6 +72,12 @@ void reset() {
   hal::CriticalSection lock;
   g_leftCount = 0;
   g_rightCount = 0;
+  ++g_resetGeneration;
+}
+
+uint32_t resetGeneration() {
+  hal::CriticalSection lock;
+  return g_resetGeneration;
 }
 
 float leftMeters() { return static_cast<float>(leftCount()) / g_countsPerMeter; }
