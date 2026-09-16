@@ -40,6 +40,21 @@ stage 7 by driving the robot into a wall.** If still missed, consider multiple r
 between ticks or the MPU-6050 motion-detect interrupt. Bumpers are the primary
 collision detector.
 
+### Bumper switches (snap-action switch · Pololu 1405)
+
+| State | Result |
+|---|---|
+| At rest | `ok (reason 0x00)` ✅ |
+| Left pressed (A3) | `TRIPPED (reason 0x01)` · `mode : SAFETY-STOP` ✅ |
+| Right pressed (A4) | `TRIPPED (reason 0x02)` ✅ |
+| Latch | Holds after release, cleared with `c` ✅ |
+
+Left and right are distinguished. Nothing trips at rest, so both are wired
+`COM–NO` correctly (an `NC` wire would read as permanently pressed). The right
+one did not respond on the first attempt and worked after the wiring was
+re-seated, which points to a loose contact. **Check that jumper pins are pushed
+fully home.**
+
 ### Control-loop jitter (telemetry on, 60 s)
 
 | Configuration | Tick period | Min / max | Overruns | Telemetry |
@@ -54,4 +69,4 @@ Not yet re-measured with the IMU added. Final measurement at stage 7 with motors
 - All telemetry dropped: the Renesas UART's `availableForWrite()` always returns 0 → decide by time left before the next tick
 - Default uploader bossac is x86_64-only → pyOCD
 
-**Stage 1 passed.**
+**Stage 1 passed.** All four sensors and both bumpers verified. Next is stage 2, motors and encoders.
