@@ -67,7 +67,7 @@ A0/A1/A2.
 
 ```
 Romi 6×AA NiMH (7.2 V) ─→ power distribution board (Pololu 3541) (reverse protection + switch)
-                              └─ VSW ─┬─→ TB6612FNG VM   (motors)
+                              └─ VSW ─┬─→ TB6612FNG VMOT   (motors)
                                       └─→ R4 VIN         (logic; the R4 regulates)
 R4 5V ─→ TB6612 VCC, encoder VCC (3.5 V minimum, so not 3.3 V)
 All grounds common
@@ -96,7 +96,7 @@ Full connection table and build order: **[assembly_eng.md](assembly_eng.md)**.
 | GPIO 15 | BIN1 | |
 | GPIO 16 | BIN2 | |
 | 3V3 | VCC | Logic |
-| — | VM | **Straight from the motor battery, not the board's 5 V** |
+| — | VMOT | **Straight from the motor battery, not the board's 5 V** |
 | GND | GND | Logic and motor grounds tied together |
 
 ### Encoders
@@ -155,12 +155,12 @@ Normally open, INPUT_PULLUP, FALLING interrupt, 30 ms software debounce.
 
 ```
 2x 18650 (7.4 V)
-   ├─→ TB6612FNG VM        (motors)
+   ├─→ TB6612FNG VMOT        (motors)
    └─→ 5 V regulator ─→ ESP32-S3 5 V pin   (logic)
 Grounds tied together
 ```
 
-- ≥1000 µF on TB6612FNG VM, 0.1 µF ceramic across each motor terminal
+- ≥1000 µF on TB6612FNG VMOT, 0.1 µF ceramic across each motor terminal
 - Use batteries with a built-in BMS
 
 > **⚠️ Do not power motors from the board's 5 V pin.**

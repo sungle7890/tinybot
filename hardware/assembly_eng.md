@@ -136,7 +136,7 @@ Fix them with the Romi motor clips. Fit the wheels.
 
 | From | To | Note |
 |---|---|---|
-| power distribution board (Pololu 3541) `VSW` | TB6612 `VM` | Motor supply, after the switch and reverse protection |
+| power distribution board (Pololu 3541) `VSW` | TB6612 `VMOT` | Motor supply, after the switch and reverse protection. Printed `VMOT` on the board; the chip datasheet calls it `VM` |
 | power distribution board (Pololu 3541) `VSW` | R4 `VIN` | Logic supply; the R4 regulates 5 V/3.3 V |
 | power distribution board (Pololu 3541) `GND` | common GND | |
 | R4 `5V` | TB6612 `VCC` | Driver logic |
@@ -184,7 +184,7 @@ Fix them with the Romi motor clips. Fit the wheels.
 
 ### Capacitor (recommended)
 The TB6612 carrier already has filter capacitors. Add a **1000 µF electrolytic
-across VM–GND** close to the driver anyway, for the Romi motors' inrush.
+across VMOT–GND** close to the driver anyway, for the Romi motors' inrush.
 ⚠️ Electrolytics are **polarised.** The striped (−) lead goes to GND.
 
 ---
