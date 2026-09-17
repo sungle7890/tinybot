@@ -248,3 +248,52 @@ progress (17 s in all).
 
 **Decisions:** bumpers dropped, gyro correction removed, sensor tilt deferred. The phase-2 exit
 criterion (10 minutes, ≤3 collisions) is recorded as not met, and the project moves to phase 3.
+
+---
+
+## Phase 3 — On-device learning (2026-09-17)
+
+### EEPROM is slow — measured
+
+After the first Q-table save, jitter showed **a single 13.5 s tick**: the control loop had stopped
+for 13.5 seconds. Re-measured by learning for 20 s with the robot held in the air, then stopping.
+
+| Measurement | Value |
+|---|---|
+| Save of ~30 changed cells (~64 bytes) | 2,828 ms |
+| Longest control tick over the same span | 2,866 ms |
+| Works out to | **about 44 ms per changed byte** |
+| First 304-byte save over blank (0xFF) flash | about 13.5 s (inferred from the jitter record) |
+
+→ Checkpoints now go out **one changed byte per loop pass**, skipping unchanged bytes. The same
+logic is tested on the host against a fake EEPROM (at most one byte per call, zero when nothing
+changed). **Its effect while driving is not measured yet.**
+
+### Learning survives a reboot — ✅
+
+After saving, the firmware was reflashed twice and rebooted, and `q` still showed `loaded from
+checkpoint, 85 steps, epsilon 0.276`. The 1 m calibration (3222.4) also survived the storage change.
+
+### 0.00 m forward in the air test
+
+The 20 s learning run in the air reported 0.00 m forward and one escape. Working back from the
+table, **encoder change was exactly zero** for forward and turns alike (forward Q 0.00; turn Q −0.02,
+which is the turn cost alone). Wheels in the air cannot fail to turn at duty 190, so **motor power
+was most likely off.** To check before driving on the floor.
+
+### Dashboard over Wi-Fi
+
+Firmware telemetry only queues when switched on with `v`, and `v` is a toggle a remote client
+cannot see the state of. A request to `/api/telemetry` now switches it on, and three seconds without
+one switches it back off (only if a fetch had turned it on). Verified: 308 lines over 12 requests,
+all in the expected format. Overruns rise while polling (the Wi-Fi module's call cost, as in
+Phase 1); with 200 ms learning steps the impact should be small, but that is not measured.
+
+### Still needs the wheels turning
+
+1. Does learning mode actually drive the wheels with motor power on
+2. Does byte-at-a-time saving stay out of the way while driving (`q` save times, `j`)
+3. Does contact detection **stay quiet on open floor** — with the floor reflection holding ranges
+   nearly still, empty space could read as "contact". Standing still, the sides wandered 30-40 mm,
+   above the 25 mm threshold, but not by much
+4. Rule-based vs learning, same conditions

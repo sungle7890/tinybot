@@ -51,18 +51,30 @@ Loss of connection is a **normal state**, not an error.
 ### A. On-device (Q-learning)
 
 ```c
-// 32 states × 4 actions × int8 = 128 bytes. Runs on an Uno.
-Q[s][a] += alpha * (reward + gamma * max_a2(Q[s2][a2]) - Q[s][a]);
+// 36 states × 4 actions × int16 (hundredths) + header = 304 bytes.
+Q[s][a] += alpha * (reward + gamma * max_a2(Q[s2][a2]) - Q[s][a]);   // alpha 0.2, gamma 0.9
 ```
 
-- State: distance-sensor bucket × left/right difference × previous action
-- Actions: forward / turn left / turn right / reverse
-- Reward: collision −10, forward +1, spinning in place −0.1 (draft, needs tuning)
-  - ⚠️ Measure travel with the encoders but **do not trust them alone.** A
-    slipping wheel raises the count while the robot stands still. Cross-check
-    against the front ToF delta — see
-    [03-hardware-bom_eng.md](03-hardware-bom_eng.md)
-- Persistence: checkpoint the Q-table to EEPROM/Flash so learning survives power cycles
+Implementation: `firmware/src/learn/qlearn.cpp` (pure logic, no hardware), wired to driving in
+`stepLearn()` in `control_loop.cpp`. Console: `l` learn / `q` table / `qs` save / `qz` reset.
+
+- State: front range in 3 bands (135 / 300 mm) × side (open / wall left / wall right) × previous action
+  - ⚠️ While the sensors see the floor (~180 mm), the front sits in the middle band almost
+    always, so all the learner can really tell apart is "very close / not". If learning looks
+    weak, suspect the sensor angle first.
+- Actions: forward / turn left / turn right / reverse — each held for 200 ms
+- Reward (draft): +30 per encoder metre forward, −0.1 per turn, −1 front too close, −10 contact
+  - With no bumper, **contact = "all three ranges moved less than 25 mm over 2 s"**
+  - ⚠️ Do not trust the encoders alone — a wheel slipping against a wall still counts
+    forward. A step that ended in contact therefore earns no forward credit. A full
+    cross-check needs the sensor angle fixed, so the front range sees real objects.
+- Exploration: ε from 0.30, ×0.999 per step, floor 0.05; stored with the table so it carries across reboots
+- Stuck: after 10 s without progress a scripted backup-and-turn frees the robot and learning
+  carries on (nothing is learned from the escape itself)
+- Persistence: checkpoint to EEPROM every 60 s and when a session ends
+  - ⚠️ The R4's EEPROM costs **about 44 ms per changed byte** (measured). Written in one go
+    it froze the control loop for seconds (2.8 s; 13.5 s for the first write over blank flash).
+    Checkpoints therefore go out **one changed byte per loop pass**, skipping unchanged bytes.
 
 This alone produces a robot that moves without commands and gets better on its own.
 

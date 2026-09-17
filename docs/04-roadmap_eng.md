@@ -57,13 +57,16 @@ Loop jitter within ±2 ms of the 50 Hz period.
 > it possible to honestly judge what AI adds in phase 3.
 > Phase 2 performance becomes the phase-3 baseline.
 
-## Phase 3 — On-device Q-learning ★ the core of the project
+## Phase 3 — On-device Q-learning ★ the core of the project ← **current**
 
-- [ ] Design and implement state discretization
-- [ ] Q-table plus ε-greedy exploration with a decay schedule
-- [ ] Reward function using encoder-measured actual forward motion
-- [ ] EEPROM/Flash checkpointing, verified across a power cycle
-- [ ] Live learning-curve plot on the host
+- [x] State discretization — 3 front bands × 3 side bands × 4 previous actions = 36 states
+- [x] Q-table plus ε-greedy exploration (0.30 → 0.05, ×0.999 per step, stored with the table)
+- [x] Draft reward — +30 per encoder metre forward, −0.1 per turn, −1 too close, −10 contact
+- [x] EEPROM checkpoint, **verified across a reboot** (85 steps and ε 0.276 restored intact)
+- [x] Host learning curve — the dashboard plots windowed mean reward live over Wi-Fi
+- [x] 20 unit tests for the learner (`pio test -e native`)
+- [ ] **A learning run on the floor** — not done even once yet
+- [ ] Compare against rule-based roaming (`a`) under the same conditions (forward distance · contacts · escapes)
 
 **Exit**:
 1. The learning curve trends upward and reproduces across 3 different seeds.

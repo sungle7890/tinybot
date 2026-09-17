@@ -4,13 +4,32 @@
 
 ## Telemetry dashboard (`dashboard/index.html`)
 
-A web page showing the board's 50 Hz telemetry live. No install — the browser
-reads USB serial directly (Web Serial).
+A web page showing the board's 50 Hz telemetry live. No install. Two ways in:
+
+- **USB** — the browser reads USB serial directly (Web Serial, Chrome/Edge)
+- **Wi-Fi** — enter the robot's IP and press **Connect Wi-Fi**. For watching untethered
+  driving and learning. Any browser works, but a page opened over `https://` cannot
+  reach the robot (http)
 
 **Shows**: distances from above (front, left, right rays); tiles for range,
 shock, rotation, tick period, encoders and mode; three 10-second charts (range /
 shock with the impact threshold / tick period with the ±2 ms budget band); a
-command console; CSV recording.
+command console; CSV recording; a **session and learning panel** (tiles for forward
+distance, contacts, escapes, learning steps and ε, plus a mean-reward-per-step curve).
+
+### Over Wi-Fi
+
+1. Open the file as is: `open host/dashboard/index.html`
+2. Type the robot's IP in the top field (e.g. `192.168.1.223`, printed on USB serial at
+   boot) → **Connect Wi-Fi**
+3. The firmware switches telemetry on by itself, and off again 3 s after requests stop
+4. The session panel refreshes from `st` every 2 s; each point on the learning curve is
+   the mean reward of the decisions taken in those 2 s
+
+Requests go out one at a time — the R4's Wi-Fi module wedges under parallel connections
+(found in Phase 1). A command reply occasionally gets lost; the console then shows
+"(no reply)" and resending works. Polling raises control-loop overruns, so **do not
+connect over Wi-Fi while measuring jitter.**
 
 ### Opening it
 
