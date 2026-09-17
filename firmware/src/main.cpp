@@ -23,6 +23,7 @@
 #include "drive/encoders.h"
 #include "drive/motors.h"
 #include "hal/hal.h"
+#include "learn/history.h"
 #include "learn/qlearn.h"
 #include "safety/safety.h"
 #include "sense/imu.h"
@@ -67,6 +68,7 @@ void setup() {
 
   // After the Wi-Fi join, whose duration varies, so the random seed does too.
   learn::begin();
+  history::begin();
   fmt::printf("q-table       : %s\n",
               learn::loadedFromCheckpoint() ? "loaded from checkpoint" : "blank");
 
@@ -84,6 +86,7 @@ void loop() {
   // Checkpoint writes, never from inside a control tick. One byte per pass:
   // a whole-table write measured 2.8 s of frozen control loop on the R4.
   learn::service();
+  history::service();
 
   // Only one consumer may drain the queue, or they split the samples between
   // them and each sees a fraction of the stream.

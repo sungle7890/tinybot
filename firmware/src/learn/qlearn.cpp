@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "hal/hal.h"
+#include "store/trickle.h"
 
 namespace learn {
 namespace {
@@ -34,25 +35,9 @@ struct Checkpoint {
 // through a critical section.
 Checkpoint g_table{};
 bool g_loaded = false;
-volatile bool g_savePending = false;
-uint32_t g_lastSaveMs = 0;
-uint32_t g_longestSaveMs = 0;
-uint32_t g_saves = 0;
-uint16_t g_lastSaveBytes = 0;
 
-// Checkpoints are flushed one changed byte per loop() pass, so the control loop
-// keeps ticking through a save instead of freezing for seconds. g_flash mirrors
-// what storage holds, byte for byte, so unchanged bytes cost nothing.
-//
-// A power cut mid-flush leaves a mix of old and new Q-values. That is tolerable
-// - they are estimates being revised anyway - and begin() still rejects a
-// header or epsilon that came out corrupt.
-Checkpoint g_flash{};
-Checkpoint g_flushing{};
-bool g_flushActive = false;
-size_t g_flushCursor = 0;
-uint32_t g_flushStartedMs = 0;
-uint16_t g_flushBytes = 0;
+Checkpoint g_mirror{};
+store::Trickle g_store(hal::Slot::kQTable, &g_table, &g_mirror, sizeof(Checkpoint));
 
 int16_t& cell(uint8_t state, uint8_t action) {
   return g_table.q[state * kActionCount + action];
@@ -89,9 +74,6 @@ void begin() {
   // A table saved under a different layout is not a partial match, it is
   // noise; start over rather than learn on top of misfiled values.
   const bool read = hal::persistLoad(hal::Slot::kQTable, &stored, sizeof(stored));
-  // Mirror storage as it is, valid or not, so the first flush only rewrites
-  // bytes that actually differ.
-  if (read) g_flash = stored;
   if (read &&
       stored.magic == kMagic && stored.version == kVersion &&
       stored.states == kStateCount && stored.actions == kActionCount &&
@@ -101,6 +83,7 @@ void begin() {
   } else {
     blank();
   }
+  g_store.seedMirror();
   randomSeed(micros());
 }
 
@@ -152,58 +135,9 @@ void reset() {
   blank();
 }
 
-void requestSave() { g_savePending = true; }
-bool savePending() { return g_savePending || g_flushActive; }
-
-namespace {
-void finishFlush() {
-  g_lastSaveMs = millis() - g_flushStartedMs;
-  if (g_lastSaveMs > g_longestSaveMs) g_longestSaveMs = g_lastSaveMs;
-  g_lastSaveBytes = g_flushBytes;
-  ++g_saves;
-  g_flushActive = false;
-}
-}  // namespace
-
-void service() {
-  if (!g_flushActive) {
-    if (!g_savePending) return;
-    // Flush a snapshot, not the live table: learning keeps changing it, and a
-    // target that moves under the cursor might never finish.
-    {
-      hal::CriticalSection lock;
-      g_flushing = g_table;
-    }
-    g_savePending = false;
-    g_flushActive = true;
-    g_flushCursor = 0;
-    g_flushBytes = 0;
-    g_flushStartedMs = millis();
-
-    if (!hal::persistByteAddressable()) {
-      hal::persistSave(hal::Slot::kQTable, &g_flushing, sizeof(g_flushing));
-      g_flash = g_flushing;
-      g_flushBytes = sizeof(g_flushing);
-      finishFlush();
-      return;
-    }
-  }
-
-  // At most one changed byte per call.
-  const uint8_t* want = reinterpret_cast<const uint8_t*>(&g_flushing);
-  uint8_t* have = reinterpret_cast<uint8_t*>(&g_flash);
-  while (g_flushCursor < sizeof(Checkpoint) && want[g_flushCursor] == have[g_flushCursor]) {
-    ++g_flushCursor;
-  }
-  if (g_flushCursor < sizeof(Checkpoint)) {
-    hal::persistWriteByte(hal::Slot::kQTable, g_flushCursor, want[g_flushCursor]);
-    have[g_flushCursor] = want[g_flushCursor];
-    ++g_flushCursor;
-    ++g_flushBytes;
-    return;
-  }
-  finishFlush();
-}
+void requestSave() { g_store.requestSave(); }
+bool savePending() { return g_store.pending(); }
+void service() { g_store.service(); }
 
 float q(uint8_t state, uint8_t action) {
   hal::CriticalSection lock;
@@ -221,10 +155,10 @@ uint32_t steps() {
 }
 
 bool loadedFromCheckpoint() { return g_loaded; }
-uint32_t lastSaveMs() { return g_lastSaveMs; }
-uint32_t longestSaveMs() { return g_longestSaveMs; }
-uint16_t lastSaveBytes() { return g_lastSaveBytes; }
-uint32_t saves() { return g_saves; }
+uint32_t lastSaveMs() { return g_store.lastMs(); }
+uint32_t longestSaveMs() { return g_store.longestMs(); }
+uint16_t lastSaveBytes() { return g_store.lastBytes(); }
+uint32_t saves() { return g_store.saves(); }
 
 const char* actionName(uint8_t action) {
   switch (action) {

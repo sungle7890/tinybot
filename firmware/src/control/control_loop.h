@@ -63,6 +63,7 @@ struct SessionStats {
   uint16_t escapes;         // scripted backup-and-turn after no progress
   uint32_t learnSteps;      // decisions taken this session
   float meanReward;         // over those decisions
+  float recentReward;       // over the last cfg::kRewardWindow of them
 };
 SessionStats sessionStats();
 

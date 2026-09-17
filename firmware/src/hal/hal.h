@@ -46,7 +46,7 @@ int fastRead(uint8_t pin);
 // --- Persistence ------------------------------------------------------------
 // Opaque blobs, one per slot so a checkpoint cannot overwrite the calibration.
 // NVS keys on the ESP32, fixed offsets into emulated EEPROM on the R4.
-enum class Slot : uint8_t { kCalibration, kQTable };
+enum class Slot : uint8_t { kCalibration, kQTable, kRuns };
 bool persistLoad(Slot slot, void* data, size_t len);
 bool persistSave(Slot slot, const void* data, size_t len);
 // The R4's emulated EEPROM costs ~44 ms per changed byte (measured), blocking

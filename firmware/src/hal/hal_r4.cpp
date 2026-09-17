@@ -16,7 +16,13 @@ namespace {
 // The calibration blob has lived at offset 0 since Phase 1; moving it would
 // orphan the value already stored on the robot. The Q-table goes after it,
 // with room for the calibration to grow.
-int slotBase(Slot slot) { return slot == Slot::kCalibration ? 0 : 64; }
+int slotBase(Slot slot) {
+  switch (slot) {
+    case Slot::kCalibration: return 0;
+    case Slot::kQTable: return 64;
+    default: return 512;  // kRuns, clear of the Q-table's 304 bytes
+  }
+}
 
 // Leave this much of the period untouched after a write, so a line that
 // finishes late still does not push the tick past its jitter budget.

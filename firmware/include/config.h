@@ -183,7 +183,12 @@ constexpr uint32_t kLearnEscapeTurnMs = 700;
 // Checkpoint cadence. The R4 writes EEPROM from the same thread as the control
 // loop, so the motors coast for the duration of a save; `q` reports how long
 // that actually took. Rare enough to keep data-flash wear negligible.
-constexpr uint32_t kLearnCheckpointMs = 60000;
+constexpr uint32_t kLearnCheckpointMs = 30000;
+
+// How many recent decisions the "is it getting better?" number averages over.
+// 50 steps is 10 s of driving: long enough to survive one unlucky turn, short
+// enough that an improvement shows up while the run is still going.
+constexpr uint16_t kRewardWindow = 50;
 
 // --- Sensors ----------------------------------------------------------------
 constexpr uint32_t kI2cFreqHz         = 400000;

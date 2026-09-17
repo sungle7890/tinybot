@@ -10,13 +10,17 @@
 
 #include "config.h"
 #include "hal/hal.h"
+#include "learn/history.h"
 #include "learn/qlearn.h"
 
 // --- Fakes ------------------------------------------------------------------
 
 namespace {
 
-uint8_t g_storage[512];
+// Slot-addressed so the Q-table and the session log cannot be tested on top
+// of each other - the bug this fake is most likely to have to catch.
+uint8_t g_storage[2][1024];
+uint8_t* slot(hal::Slot s) { return g_storage[s == hal::Slot::kQTable ? 0 : 1]; }
 bool g_byteAddressable = true;
 int g_byteWrites = 0;
 int g_blobWrites = 0;
@@ -24,6 +28,7 @@ std::deque<long> g_randoms;  // scripted results for random(); empty -> 0
 uint32_t g_nowMs = 0;
 
 void eraseStorage() { std::memset(g_storage, 0xFF, sizeof(g_storage)); }
+constexpr size_t kSlotBytes = sizeof(g_storage[0]);
 
 // Runs service() until the checkpoint is fully written. Returns the number of
 // calls, and fails if any single call wrote more than one byte.
@@ -61,21 +66,21 @@ namespace hal {
 CriticalSection::CriticalSection() {}
 CriticalSection::~CriticalSection() {}
 
-bool persistLoad(Slot slot, void* data, size_t len) {
-  if (slot != Slot::kQTable || len > sizeof(g_storage)) return false;
-  std::memcpy(data, g_storage, len);
+bool persistLoad(Slot s, void* data, size_t len) {
+  if (s == Slot::kCalibration || len > kSlotBytes) return false;
+  std::memcpy(data, slot(s), len);
   return true;
 }
-bool persistSave(Slot slot, const void* data, size_t len) {
-  if (slot != Slot::kQTable || len > sizeof(g_storage)) return false;
-  std::memcpy(g_storage, data, len);
+bool persistSave(Slot s, const void* data, size_t len) {
+  if (s == Slot::kCalibration || len > kSlotBytes) return false;
+  std::memcpy(slot(s), data, len);
   ++g_blobWrites;
   return true;
 }
 bool persistByteAddressable() { return g_byteAddressable; }
-bool persistWriteByte(Slot slot, size_t offset, uint8_t value) {
-  if (slot != Slot::kQTable || offset >= sizeof(g_storage)) return false;
-  g_storage[offset] = value;
+bool persistWriteByte(Slot s, size_t offset, uint8_t value) {
+  if (s == Slot::kCalibration || offset >= kSlotBytes) return false;
+  slot(s)[offset] = value;
   ++g_byteWrites;
   return true;
 }
@@ -89,9 +94,31 @@ void setUp() {
   g_randoms.clear();
   g_nowMs = 0;
   learn::begin();
+  history::begin();
 }
 
 void tearDown() {}
+
+int flushHistory() {
+  int calls = 0;
+  while (history::savePending()) {
+    history::service();
+    if (++calls > 4000) TEST_FAIL_MESSAGE("history flush never finished");
+  }
+  return calls;
+}
+
+history::Run madeRun(uint8_t mode, float metres) {
+  history::Run r{};
+  r.mode = mode;
+  r.seconds = 60;
+  r.forwardMeters = metres;
+  r.contacts = 1;
+  r.steps = 300;
+  r.meanReward = 0.4f;
+  r.stopReason = history::kStopCommand;
+  return r;
+}
 
 // --- Boot -------------------------------------------------------------------
 
@@ -263,19 +290,20 @@ void test_saving_again_with_no_changes_writes_nothing() {
   TEST_ASSERT_EQUAL_INT(0, g_byteWrites);
 }
 
-void test_flush_writes_the_snapshot_taken_when_it_started() {
+void test_a_change_made_mid_flush_is_not_lost() {
+  // The flush reads the live table as it goes, so a value changed after the
+  // cursor passed it is simply written by the next save - never dropped.
   learn::update(1, learn::kForward, 1.0f, 0);
   learn::requestSave();
-  learn::service();  // flush starts: snapshot taken, first byte written
-
-  // Learning carries on mid-flush.
+  learn::service();  // flush begins
   learn::update(2, learn::kForward, 1.0f, 0);
   flush();
 
-  // Storage holds the snapshot: the mid-flush change is not in it...
+  learn::requestSave();
+  flush();
   learn::begin();
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, learn::q(2, learn::kForward));
   TEST_ASSERT_TRUE(learn::q(1, learn::kForward) > 0.0f);
+  TEST_ASSERT_TRUE(learn::q(2, learn::kForward) > 0.0f);
 }
 
 void test_a_save_requested_mid_flush_runs_after_it() {
@@ -303,7 +331,7 @@ void test_corrupt_epsilon_is_rejected_at_boot() {
   flush();
 
   const float bogus = 2.0f;
-  std::memcpy(g_storage + 8, &bogus, sizeof(bogus));  // magic(4) + 4 header bytes
+  std::memcpy(slot(hal::Slot::kQTable) + 8, &bogus, sizeof(bogus));  // magic(4) + 4 header
   learn::begin();
   TEST_ASSERT_FALSE(learn::loadedFromCheckpoint());
   TEST_ASSERT_EQUAL_FLOAT(0.0f, learn::q(1, learn::kForward));
@@ -319,6 +347,67 @@ void test_a_failed_load_does_not_claim_the_previous_one() {
   eraseStorage();
   learn::begin();
   TEST_ASSERT_FALSE(learn::loadedFromCheckpoint());
+}
+
+// --- Session history --------------------------------------------------------
+
+void test_history_starts_empty_and_ids_start_at_one() {
+  TEST_ASSERT_EQUAL_UINT8(0, history::count());
+  history::record(madeRun(4, 1.5f));
+  TEST_ASSERT_EQUAL_UINT8(1, history::count());
+  TEST_ASSERT_EQUAL_UINT32(1, history::at(0).id);
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, history::at(0).forwardMeters);
+}
+
+void test_history_keeps_the_newest_runs_in_order() {
+  for (int i = 0; i < history::kMax + 3; ++i) {
+    history::record(madeRun(i % 2 ? 5 : 4, static_cast<float>(i)));
+  }
+  TEST_ASSERT_EQUAL_UINT8(history::kMax, history::count());
+  // The three oldest fell off; what is left is still oldest-first.
+  TEST_ASSERT_EQUAL_FLOAT(3.0f, history::at(0).forwardMeters);
+  TEST_ASSERT_EQUAL_FLOAT(static_cast<float>(history::kMax + 2),
+                          history::at(history::kMax - 1).forwardMeters);
+  for (uint8_t i = 1; i < history::count(); ++i) {
+    TEST_ASSERT_EQUAL_UINT32(history::at(i - 1).id + 1, history::at(i).id);
+  }
+}
+
+void test_history_survives_a_reboot() {
+  history::record(madeRun(5, 14.11f));
+  history::record(madeRun(4, 3.2f));
+  flushHistory();
+
+  history::begin();
+  TEST_ASSERT_EQUAL_UINT8(2, history::count());
+  TEST_ASSERT_EQUAL_FLOAT(14.11f, history::at(0).forwardMeters);
+  TEST_ASSERT_EQUAL_UINT8(4, history::at(1).mode);
+  TEST_ASSERT_EQUAL_UINT32(3, history::nextId());
+}
+
+void test_clearing_history_keeps_ids_moving_forward() {
+  history::record(madeRun(5, 1.0f));
+  history::record(madeRun(5, 2.0f));
+  history::clear();
+  flushHistory();
+  TEST_ASSERT_EQUAL_UINT8(0, history::count());
+  history::record(madeRun(5, 3.0f));
+  TEST_ASSERT_EQUAL_UINT32(3, history::at(0).id);  // not back to 1
+}
+
+void test_history_and_q_table_do_not_share_storage() {
+  learn::update(4, learn::kTurnLeft, 2.0f, 0);
+  learn::requestSave();
+  flush();
+  history::record(madeRun(5, 9.0f));
+  flushHistory();
+
+  learn::begin();
+  history::begin();
+  TEST_ASSERT_TRUE(learn::loadedFromCheckpoint());
+  TEST_ASSERT_TRUE(learn::q(4, learn::kTurnLeft) > 0.0f);
+  TEST_ASSERT_EQUAL_UINT8(1, history::count());
+  TEST_ASSERT_EQUAL_FLOAT(9.0f, history::at(0).forwardMeters);
 }
 
 int main() {
@@ -338,10 +427,15 @@ int main() {
   RUN_TEST(test_checkpoint_survives_a_reboot);
   RUN_TEST(test_a_later_save_writes_only_the_bytes_that_changed);
   RUN_TEST(test_saving_again_with_no_changes_writes_nothing);
-  RUN_TEST(test_flush_writes_the_snapshot_taken_when_it_started);
+  RUN_TEST(test_a_change_made_mid_flush_is_not_lost);
   RUN_TEST(test_a_save_requested_mid_flush_runs_after_it);
   RUN_TEST(test_whole_blob_storage_saves_in_one_call);
   RUN_TEST(test_corrupt_epsilon_is_rejected_at_boot);
   RUN_TEST(test_a_failed_load_does_not_claim_the_previous_one);
+  RUN_TEST(test_history_starts_empty_and_ids_start_at_one);
+  RUN_TEST(test_history_keeps_the_newest_runs_in_order);
+  RUN_TEST(test_history_survives_a_reboot);
+  RUN_TEST(test_clearing_history_keeps_ids_moving_forward);
+  RUN_TEST(test_history_and_q_table_do_not_share_storage);
   return UNITY_END();
 }

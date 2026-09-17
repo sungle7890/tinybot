@@ -865,13 +865,13 @@
         </div>
         <div class="chart">
           <header>
-            <h2 data-i18n="chartReward">스텝당 평균 보상 · 학습 세션</h2>
+            <h2 data-i18n="chartReward">최근 50스텝 평균 보상</h2>
           </header>
           <canvas id="cReward" aria-label="Reward per step chart"></canvas>
           <p class="hint" data-i18n="rewardHint">
-            2초마다, 그 사이에 한 결정들의 평균 보상입니다. 학습이 되고 있다면
-            시간이 갈수록 올라가야 합니다. 전진 1 m당 +30, 회전 −0.1, 너무 가까움
-            −1, 접촉 −10.
+            최근 50개 결정(약 10초)의 평균 보상입니다. 학습이 되고 있다면 시간이
+            갈수록 올라가야 합니다. 전진 1 m당 +30, 회전 −0.1, 너무 가까움 −1,
+            접촉 −10.
           </p>
         </div>
       </section>
@@ -918,6 +918,9 @@
             </button>
             <button class="btn" type="button" data-cmd="q">
               q<span data-i18n="qQ">Q 테이블</span>
+            </button>
+            <button class="btn" type="button" data-cmd="h">
+              h<span data-i18n="qH">주행 이력</span>
             </button>
             <button class="btn danger" type="button" data-cmd="s">
               s<span data-i18n="qS">정지</span>
@@ -1053,19 +1056,21 @@
             learnEpsSub: "무작위로 고를 확률",
             learnHint:
               "Wi-Fi로 연결하면 2초마다 st를 받아 채웁니다. USB에서는 st를 직접 보내야 갱신됩니다.",
-            chartReward: "스텝당 평균 보상 · 학습 세션",
+            chartReward: "최근 50스텝 평균 보상",
             rewardHint:
-              "2초마다, 그 사이에 한 결정들의 평균 보상입니다. 학습이 되고 있다면 시간이 갈수록 올라가야 합니다. 전진 1 m당 +30, 회전 −0.1, 너무 가까움 −1, 접촉 −10.",
+              "최근 50개 결정(약 10초)의 평균 보상입니다. 학습이 되고 있다면 시간이 갈수록 올라가야 합니다. 전진 1 m당 +30, 회전 −0.1, 너무 가까움 −1, 접촉 −10.",
             running: "진행 중",
             ended: "종료",
             perMin: "분당",
             meanRewardSub: "세션 평균 보상",
+            recentRewardSub: "최근 50스텝",
             sessEndedPrefix: "마지막 종료 사유: ",
             noSession: "아직 세션 없음",
             rewardEmpty: "학습 주행(l)을 시작하면 여기 그려집니다",
             qA: "규칙 주행",
             qL: "학습 주행",
             qQ: "Q 테이블",
+            qH: "주행 이력",
             safetyOk: "안전 OK",
             bumperL: "좌 범퍼",
             bumperR: "우 범퍼",
@@ -1158,19 +1163,21 @@
             learnEpsSub: "chance of a random pick",
             learnHint:
               "Over Wi-Fi this refreshes from st every 2 s. Over USB it only updates when you send st.",
-            chartReward: "Mean reward per step · learning session",
+            chartReward: "Mean reward over the last 50 steps",
             rewardHint:
-              "Every 2 s, the mean reward of the decisions taken since the last point. If learning works it should rise over time. +30 per metre forward, −0.1 per turn, −1 too close, −10 contact.",
+              "The mean reward of the last 50 decisions (about 10 s). If learning works it should rise over time. +30 per metre forward, −0.1 per turn, −1 too close, −10 contact.",
             running: "running",
             ended: "ended",
             perMin: "per min",
             meanRewardSub: "session mean reward",
+            recentRewardSub: "last 50 steps",
             sessEndedPrefix: "Last stop reason: ",
             noSession: "no session yet",
             rewardEmpty: "Start a learning run (l) to draw this",
             qA: "rule roam",
             qL: "learn",
             qQ: "Q-table",
+            qH: "run log",
             safetyOk: "safety OK",
             bumperL: "left bumper",
             bumperR: "right bumper",
@@ -1614,14 +1621,19 @@
             return;
           }
           m = line.match(
-            /^learning\s*:\s*(\d+) steps, mean reward ([+-]?[\d.]+), epsilon ([\d.]+)/,
+            /^learning\s*:\s*(\d+) steps, mean reward ([+-]?[\d.]+)(?:, recent ([+-]?[\d.]+))?, epsilon ([\d.]+)/,
           );
           if (m && S) {
             const steps = Number(m[1]),
               mean = Number(m[2]);
             S.steps = steps;
             S.mean = mean;
-            S.eps = Number(m[3]);
+            // The firmware's own window when it reports one. Deriving it from
+            // the printed session mean works, but that mean is rounded to two
+            // decimals, and over hundreds of steps the rounding alone swamps
+            // the difference between two samples.
+            S.recent = m[3] === undefined ? undefined : Number(m[3]);
+            S.eps = Number(m[4]);
             const sum = mean * steps;
             if (prevLearn && steps < prevLearn.steps) {
               curve = [];
@@ -1630,7 +1642,10 @@
             if (prevLearn && steps > prevLearn.steps && pendingElapsed !== null) {
               curve.push({
                 t: pendingElapsed,
-                v: (sum - prevLearn.sum) / (steps - prevLearn.steps),
+                v:
+                  S.recent !== undefined
+                    ? S.recent
+                    : (sum - prevLearn.sum) / (steps - prevLearn.steps),
               });
               if (curve.length > 600) curve.shift();
             }
@@ -1671,6 +1686,10 @@
             $("vSteps").textContent = S.steps;
             $("sSteps").textContent =
               `${t("meanRewardSub")} ${S.mean >= 0 ? "+" : ""}${S.mean.toFixed(2)}`;
+            if (S.recent !== undefined) {
+              $("sSteps").textContent +=
+                ` · ${t("recentRewardSub")} ${S.recent >= 0 ? "+" : ""}${S.recent.toFixed(2)}`;
+            }
             $("vEps").textContent = S.eps.toFixed(3);
           } else {
             $("vSteps").textContent = dash;

@@ -8,6 +8,7 @@
 #include "drive/encoders.h"
 #include "drive/motors.h"
 #include "hal/hal.h"
+#include "learn/history.h"
 #include "learn/qlearn.h"
 #include "safety/safety.h"
 #include "sense/imu.h"
@@ -67,6 +68,13 @@ uint16_t g_sessContacts = 0;
 uint16_t g_sessEscapes = 0;
 uint32_t g_sessSteps = 0;
 float g_sessRewardSum = 0.0f;
+// The session mean flattens out and hides what the robot is doing now, and a
+// host cannot recover the recent mean from a rounded printout. So the window
+// is kept here, where the rewards are.
+float g_rewardWindow[cfg::kRewardWindow] = {};
+uint16_t g_rewardAt = 0;
+uint16_t g_rewardFilled = 0;
+uint8_t g_sessStopReason = history::kStopUnknown;
 
 // Learning step in progress. A decision holds for cfg::kLearnStepMs, and its
 // reward is only known once that time has passed.
@@ -234,10 +242,39 @@ void beginSession(Mode mode, uint32_t now) {
   g_sessEscapes = 0;
   g_sessSteps = 0;
   g_sessRewardSum = 0.0f;
+  g_rewardAt = 0;
+  g_rewardFilled = 0;
+  g_sessStopReason = history::kStopUnknown;
 }
 
-void endSession(uint32_t now) {
-  if (g_sessEndedMs == 0 && g_sessMode != Mode::kIdle) g_sessEndedMs = now;
+float recentRewardMean() {
+  if (!g_rewardFilled) return 0.0f;
+  float sum = 0.0f;
+  for (uint16_t i = 0; i < g_rewardFilled; ++i) sum += g_rewardWindow[i];
+  return sum / static_cast<float>(g_rewardFilled);
+}
+
+// Writes the run into the robot's own log. Called once, when a session ends:
+// the radio drops and batteries die, so a run that is only in the host's
+// scrollback is a run that can be lost.
+void endSession(uint32_t now, uint8_t reason) {
+  if (g_sessEndedMs != 0 || g_sessMode == Mode::kIdle) return;
+  g_sessEndedMs = now;
+  g_sessStopReason = reason;
+
+  history::Run run{};
+  run.mode = static_cast<uint8_t>(g_sessMode);
+  run.contacts = g_sessContacts > 255 ? 255 : static_cast<uint8_t>(g_sessContacts);
+  run.escapes = g_sessEscapes > 255 ? 255 : static_cast<uint8_t>(g_sessEscapes);
+  run.stopReason = reason;
+  run.seconds = static_cast<uint16_t>((now - g_sessStartedMs) / 1000);
+  run.steps = g_sessSteps > 65535 ? 65535 : static_cast<uint16_t>(g_sessSteps);
+  run.forwardMeters =
+      static_cast<float>(g_sessForwardCounts) / encoders::countsPerMeter();
+  run.meanReward =
+      g_sessSteps ? g_sessRewardSum / static_cast<float>(g_sessSteps) : 0.0f;
+  run.epsilonEnd = g_sessMode == Mode::kLearn ? learn::epsilon() : 0.0f;
+  history::record(run);
 }
 
 // Per tick: count only forward travel. Turning in place nets to ~zero and
@@ -258,10 +295,10 @@ void trackSession() {
 
 // Ends a learning session from inside the control loop, and keeps what was
 // learned: a session cut short by the cap is still worth checkpointing.
-void finishLearn(const char* reason) {
+void finishLearn(const char* reason, uint8_t stopReason) {
   motors::brake();
   learn::requestSave();
-  endSession(millis());
+  endSession(millis(), stopReason);
   hal::CriticalSection lock;
   g_autoStopReason = reason;
   g_mode = Mode::kIdle;
@@ -269,9 +306,9 @@ void finishLearn(const char* reason) {
 
 // Ends roaming from inside the control loop. Mirrors finishDrive: brake first,
 // then take the lock only for the mode write.
-void finishAuto(const char* reason) {
+void finishAuto(const char* reason, uint8_t stopReason) {
   motors::brake();
-  endSession(millis());
+  endSession(millis(), stopReason);
   hal::CriticalSection lock;
   g_autoStopReason = reason;
   g_mode = Mode::kIdle;
@@ -292,11 +329,11 @@ void stepAuto(uint8_t bumped) {
   // own terms - a turn that never finds a clear front just becomes a backup,
   // which becomes another turn - and the radio link is not a dependable stop.
   if (now - g_lastCruiseMs > cfg::kAutoStuckMs) {
-    finishAuto("stuck: no clear path found, evading too long");
+    finishAuto("stuck: no clear path found, evading too long", history::kStopStuck);
     return;
   }
   if (now - g_autoStartedMs > cfg::kAutoMaxRunMs) {
-    finishAuto("session time limit reached");
+    finishAuto("session time limit reached", history::kStopTimeCap);
     return;
   }
 
@@ -429,7 +466,7 @@ void stepLearn() {
   const uint32_t now = millis();
 
   if (now - g_sessStartedMs > cfg::kLearnMaxRunMs) {
-    finishLearn("session time limit reached");
+    finishLearn("session time limit reached", history::kStopTimeCap);
     return;
   }
   // No front range means no state. Abandon the step rather than score it on
@@ -481,6 +518,9 @@ void stepLearn() {
 
   ++g_sessSteps;
   g_sessRewardSum += reward;
+  g_rewardWindow[g_rewardAt] = reward;
+  g_rewardAt = (g_rewardAt + 1) % cfg::kRewardWindow;
+  if (g_rewardFilled < cfg::kRewardWindow) ++g_rewardFilled;
   if (g_stepContact) ++g_sessContacts;
   if (meters > cfg::kLearnProgressM) g_learnProgressMs = now;
   g_prevAction = g_stepAction;
@@ -545,7 +585,7 @@ void step() {
   // A fault that ends a session must still close it and keep what was learned;
   // a broken encoder wire is exactly when nobody is about to type `qs`.
   if (stoppedSession == Mode::kLearn) learn::requestSave();
-  if (stoppedSession != Mode::kIdle) endSession(millis());
+  if (stoppedSession != Mode::kIdle) endSession(millis(), history::kStopSafety);
 
   switch (modeNow) {
     case Mode::kIdle:
@@ -607,7 +647,7 @@ void requestIdle() {
   const bool bumped = safety::tripped();
   const Mode was = mode();
   if (was == Mode::kLearn) learn::requestSave();
-  if (was == Mode::kAuto || was == Mode::kLearn) endSession(millis());
+  if (was == Mode::kAuto || was == Mode::kLearn) endSession(millis(), history::kStopCommand);
   hal::CriticalSection lock;
   g_mode = bumped ? Mode::kSafetyStop : Mode::kIdle;
   g_reqLeft = 0;
@@ -669,6 +709,7 @@ SessionStats sessionStats() {
   s.escapes = g_sessEscapes;
   s.learnSteps = g_sessSteps;
   s.meanReward = g_sessSteps ? g_sessRewardSum / static_cast<float>(g_sessSteps) : 0.0f;
+  s.recentReward = recentRewardMean();
   return s;
 }
 

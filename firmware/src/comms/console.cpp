@@ -10,6 +10,7 @@
 #include "config.h"
 #include "control/control_loop.h"
 #include "hal/hal.h"
+#include "learn/history.h"
 #include "learn/qlearn.h"
 #include "drive/encoders.h"
 #include "drive/motors.h"
@@ -51,6 +52,8 @@ void printHelp() {
       "  q              Q-table, epsilon, checkpoint info\n"
       "  qs             save the Q-table now\n"
       "  qz             forget everything learned\n"
+      "  h              past driving sessions (rule-based and learning)\n"
+      "  hz             clear the session log\n"
       "  s              stop (coast)\n"
       "  b              brake\n"
       "  e              encoder counts and metres\n"
@@ -88,9 +91,10 @@ void cmdStatus() {
                 static_cast<unsigned>(ss.contacts),
                 static_cast<unsigned>(ss.escapes));
     if (ss.mode == control::Mode::kLearn) {
-      fmt::printf("learning      : %lu steps, mean reward %+.2f, epsilon %.3f\n",
+      fmt::printf("learning      : %lu steps, mean reward %+.2f, recent %+.2f, "
+                  "epsilon %.3f\n",
                   static_cast<unsigned long>(ss.learnSteps), ss.meanReward,
-                  learn::epsilon());
+                  ss.recentReward, learn::epsilon());
     }
   }
   if (const char* stopped = control::autoStopReason()) {
@@ -168,6 +172,31 @@ void cmdQTable() {
     fmt::printf("  %s\n", learn::actionName(best));
   }
   if (shown == 0) fmt::println("(nothing learned yet)");
+}
+
+void cmdHistory() {
+  const uint8_t n = history::count();
+  fmt::printf("sessions logged: %u (next id %lu)\n", static_cast<unsigned>(n),
+              static_cast<unsigned long>(history::nextId()));
+  if (n == 0) {
+    fmt::println("(none yet - run `a` or `l`)");
+    return;
+  }
+  fmt::println("  id  mode   time   forward   m/min  contacts  escapes  "
+               "steps  reward  ended");
+  for (uint8_t i = 0; i < n; ++i) {
+    const history::Run& r = history::at(i);
+    const float minutes = r.seconds / 60.0f;
+    fmt::printf("%4lu  %-5s %4us  %6.2f m  %6.2f  %8u  %7u  %5u  %+5.2f  %s\n",
+                static_cast<unsigned long>(r.id),
+                control::modeName(static_cast<control::Mode>(r.mode)),
+                static_cast<unsigned>(r.seconds), r.forwardMeters,
+                minutes > 0.0f ? r.forwardMeters / minutes : 0.0f,
+                static_cast<unsigned>(r.contacts),
+                static_cast<unsigned>(r.escapes),
+                static_cast<unsigned>(r.steps), r.meanReward,
+                history::stopReasonName(r.stopReason));
+  }
 }
 
 void cmdJitter() {
@@ -298,6 +327,11 @@ void dispatch(char* line) {
     }
   } else if (!strcmp(cmd, "q")) {
     cmdQTable();
+  } else if (!strcmp(cmd, "h")) {
+    cmdHistory();
+  } else if (!strcmp(cmd, "hz")) {
+    history::clear();
+    fmt::println("session log cleared");
   } else if (!strcmp(cmd, "qs")) {
     learn::requestSave();
     fmt::println("save requested - check `q` for the write time");

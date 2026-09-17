@@ -13,7 +13,13 @@ namespace {
 
 constexpr char kNvsNamespace[] = "tinybot";
 // "state" is the calibration key from Phase 1; kept so stored values survive.
-const char* nvsKey(Slot slot) { return slot == Slot::kCalibration ? "state" : "qtable"; }
+const char* nvsKey(Slot slot) {
+  switch (slot) {
+    case Slot::kCalibration: return "state";
+    case Slot::kQTable: return "qtable";
+    default: return "runs";
+  }
+}
 
 constexpr uint32_t kPwmFreqHz = 20000;  // above audible
 constexpr uint8_t kPwmResBits = 10;
