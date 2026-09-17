@@ -12,7 +12,8 @@ namespace hal {
 namespace {
 
 constexpr char kNvsNamespace[] = "tinybot";
-constexpr char kNvsKeyBlob[] = "state";
+// "state" is the calibration key from Phase 1; kept so stored values survive.
+const char* nvsKey(Slot slot) { return slot == Slot::kCalibration ? "state" : "qtable"; }
 
 constexpr uint32_t kPwmFreqHz = 20000;  // above audible
 constexpr uint8_t kPwmResBits = 10;
@@ -71,21 +72,24 @@ int fastRead(uint8_t pin) {
   return gpio_get_level(static_cast<gpio_num_t>(pin));
 }
 
-bool persistLoad(void* data, size_t len) {
+bool persistLoad(Slot slot, void* data, size_t len) {
   Preferences prefs;
   if (!prefs.begin(kNvsNamespace, /*readOnly=*/true)) return false;
-  const size_t read = prefs.getBytes(kNvsKeyBlob, data, len);
+  const size_t read = prefs.getBytes(nvsKey(slot), data, len);
   prefs.end();
   return read == len;
 }
 
-bool persistSave(const void* data, size_t len) {
+bool persistSave(Slot slot, const void* data, size_t len) {
   Preferences prefs;
   if (!prefs.begin(kNvsNamespace, /*readOnly=*/false)) return false;
-  const size_t written = prefs.putBytes(kNvsKeyBlob, data, len);
+  const size_t written = prefs.putBytes(nvsKey(slot), data, len);
   prefs.end();
   return written == len;
 }
+
+bool persistByteAddressable() { return false; }
+bool persistWriteByte(Slot, size_t, uint8_t) { return false; }
 
 void controlLoopBegin(void (*step)(), uint32_t hz) {
   g_step = step;

@@ -9,8 +9,8 @@
 //              loop(). Nothing in loop() may block - telemetry printing skips
 //              a line rather than waiting on the UART
 //
-// Phase 1 exists to answer one question: are the sensors and odometry good
-// enough to trust a reward signal later? Nothing here learns anything.
+// Phase 1 asked whether the sensors and odometry are good enough to trust a
+// reward signal. Phase 3 now uses that signal: `l` learns on the robot itself.
 
 #include <Arduino.h>
 
@@ -23,6 +23,7 @@
 #include "drive/encoders.h"
 #include "drive/motors.h"
 #include "hal/hal.h"
+#include "learn/qlearn.h"
 #include "safety/safety.h"
 #include "sense/imu.h"
 #include "sense/tof.h"
@@ -64,6 +65,11 @@ void setup() {
     fmt::printf("wifi          : off (no secrets.h, or the join failed)\n");
   }
 
+  // After the Wi-Fi join, whose duration varies, so the random seed does too.
+  learn::begin();
+  fmt::printf("q-table       : %s\n",
+              learn::loadedFromCheckpoint() ? "loaded from checkpoint" : "blank");
+
   control::begin();
   console::printStatus();
 }
@@ -75,6 +81,9 @@ void loop() {
 
   console::poll();
   wifi_link::service();
+  // Checkpoint writes, never from inside a control tick. One byte per pass:
+  // a whole-table write measured 2.8 s of frozen control loop on the R4.
+  learn::service();
 
   // Only one consumer may drain the queue, or they split the samples between
   // them and each sees a fraction of the stream.

@@ -8,6 +8,7 @@
 #include "drive/encoders.h"
 #include "drive/motors.h"
 #include "hal/hal.h"
+#include "learn/qlearn.h"
 #include "safety/safety.h"
 #include "sense/imu.h"
 #include "sense/tof.h"
@@ -54,6 +55,33 @@ uint32_t g_autoStartedMs = 0;
 uint32_t g_lastCruiseMs = 0;
 uint16_t g_cruiseRunTicks = 0;
 const char* g_autoStopReason = nullptr;
+
+// Session measurement, shared by roaming and learning.
+Mode g_sessMode = Mode::kIdle;
+uint32_t g_sessStartedMs = 0;
+uint32_t g_sessEndedMs = 0;
+int32_t g_sessPrevLeft = 0, g_sessPrevRight = 0;
+uint32_t g_sessGeneration = 0;
+int64_t g_sessForwardCounts = 0;
+uint16_t g_sessContacts = 0;
+uint16_t g_sessEscapes = 0;
+uint32_t g_sessSteps = 0;
+float g_sessRewardSum = 0.0f;
+
+// Learning step in progress. A decision holds for cfg::kLearnStepMs, and its
+// reward is only known once that time has passed.
+bool g_stepActive = false;
+uint8_t g_stepState = 0;
+learn::Action g_stepAction = learn::kForward;
+learn::Action g_prevAction = learn::kForward;
+uint32_t g_stepStartedMs = 0;
+int32_t g_stepStartLeft = 0, g_stepStartRight = 0;
+bool g_stepContact = false;
+uint32_t g_learnProgressMs = 0;
+uint32_t g_lastCheckpointMs = 0;
+uint32_t g_escapeBackUntilMs = 0;
+uint32_t g_escapeTurnUntilMs = 0;
+bool g_escapeLeft = false;
 
 void recordTick(uint32_t periodUs) {
   ++g_ticks;
@@ -194,10 +222,56 @@ bool worldStoppedChanging(uint32_t now) {
   return still;
 }
 
+void beginSession(Mode mode, uint32_t now) {
+  g_sessMode = mode;
+  g_sessStartedMs = now;
+  g_sessEndedMs = 0;
+  g_sessPrevLeft = encoders::leftCount();
+  g_sessPrevRight = encoders::rightCount();
+  g_sessGeneration = encoders::resetGeneration();
+  g_sessForwardCounts = 0;
+  g_sessContacts = 0;
+  g_sessEscapes = 0;
+  g_sessSteps = 0;
+  g_sessRewardSum = 0.0f;
+}
+
+void endSession(uint32_t now) {
+  if (g_sessEndedMs == 0 && g_sessMode != Mode::kIdle) g_sessEndedMs = now;
+}
+
+// Per tick: count only forward travel. Turning in place nets to ~zero and
+// reversing is not progress, so neither can inflate the score.
+void trackSession() {
+  const int32_t left = encoders::leftCount();
+  const int32_t right = encoders::rightCount();
+  const uint32_t generation = encoders::resetGeneration();
+  if (generation != g_sessGeneration) {
+    g_sessGeneration = generation;  // someone zeroed them: re-baseline
+  } else {
+    const int32_t mean = ((left - g_sessPrevLeft) + (right - g_sessPrevRight)) / 2;
+    if (mean > 0) g_sessForwardCounts += mean;
+  }
+  g_sessPrevLeft = left;
+  g_sessPrevRight = right;
+}
+
+// Ends a learning session from inside the control loop, and keeps what was
+// learned: a session cut short by the cap is still worth checkpointing.
+void finishLearn(const char* reason) {
+  motors::brake();
+  learn::requestSave();
+  endSession(millis());
+  hal::CriticalSection lock;
+  g_autoStopReason = reason;
+  g_mode = Mode::kIdle;
+}
+
 // Ends roaming from inside the control loop. Mirrors finishDrive: brake first,
 // then take the lock only for the mode write.
 void finishAuto(const char* reason) {
   motors::brake();
+  endSession(millis());
   hal::CriticalSection lock;
   g_autoStopReason = reason;
   g_mode = Mode::kIdle;
@@ -282,6 +356,7 @@ void stepAuto(uint8_t bumped) {
       // Cruising, front says clear, and nothing is moving: it is against
       // something the beam cannot see. Back off and turn, as if bumped.
       if (worldStoppedChanging(now)) {
+        ++g_sessContacts;
         g_roam = Roam::kBackup;
         g_turnLeft = moreRoomOnLeft();
         g_roamUntilMs = now + cfg::kBackupMs;
@@ -317,6 +392,110 @@ void stepAuto(uint8_t bumped) {
   }
 }
 
+void driveAction(learn::Action action) {
+  switch (action) {
+    case learn::kForward:
+      motors::set(cfg::kAutoCruiseDuty, cfg::kAutoCruiseDuty);
+      break;
+    case learn::kTurnLeft:
+      motors::set(-cfg::kAutoTurnDuty, cfg::kAutoTurnDuty);
+      break;
+    case learn::kTurnRight:
+      motors::set(cfg::kAutoTurnDuty, -cfg::kAutoTurnDuty);
+      break;
+    case learn::kBack:
+    default:
+      motors::set(-cfg::kAutoBackDuty, -cfg::kAutoBackDuty);
+      break;
+  }
+}
+
+float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool contact) {
+  float reward = cfg::kRewardPerMeter * meters;
+  if (action == learn::kTurnLeft || action == learn::kTurnRight) reward -= cfg::kTurnCost;
+  if (frontMm < cfg::kFrontBlockedMm) reward -= cfg::kNearCost;
+  if (contact) reward -= cfg::kContactCost;
+  return reward;
+}
+
+// One tick of learning. A decision is taken, held for kLearnStepMs, scored
+// from the encoders and ranges, and fed back before the next one is taken.
+void stepLearn() {
+  const uint32_t now = millis();
+
+  if (now - g_sessStartedMs > cfg::kLearnMaxRunMs) {
+    finishLearn("session time limit reached");
+    return;
+  }
+  // No front range means no state. Abandon the step rather than score it on
+  // numbers that are not there.
+  if (!tof::fresh(tof::kFront)) {
+    motors::coast();
+    g_stepActive = false;
+    return;
+  }
+
+  // Scripted escape: not a decision, so nothing is learned from it.
+  if (now < g_escapeTurnUntilMs) {
+    if (now < g_escapeBackUntilMs) {
+      motors::set(-cfg::kAutoBackDuty, -cfg::kAutoBackDuty);
+    } else {
+      const int16_t duty = cfg::kAutoTurnDuty;
+      motors::set(g_escapeLeft ? -duty : duty, g_escapeLeft ? duty : -duty);
+    }
+    resetRangeWindow(now);
+    g_learnProgressMs = now;
+    return;
+  }
+
+  const uint16_t front = tof::rangeMm(tof::kFront);
+  const uint16_t left = tof::rangeMm(tof::kLeft);
+  const uint16_t right = tof::rangeMm(tof::kRight);
+
+  if (!g_stepActive) {
+    g_stepState = learn::encodeState(front, left, right, g_prevAction);
+    g_stepAction = learn::choose(g_stepState);
+    g_stepStartedMs = now;
+    g_stepStartLeft = encoders::leftCount();
+    g_stepStartRight = encoders::rightCount();
+    g_stepContact = false;
+    g_stepActive = true;
+  }
+  driveAction(g_stepAction);
+  if (worldStoppedChanging(now)) g_stepContact = true;
+
+  if (now - g_stepStartedMs < cfg::kLearnStepMs) return;
+
+  // Step over: score it.
+  const int32_t dCounts = ((encoders::leftCount() - g_stepStartLeft) +
+                           (encoders::rightCount() - g_stepStartRight)) / 2;
+  const float meters = static_cast<float>(dCounts) / encoders::countsPerMeter();
+  const float reward = rewardFor(g_stepAction, meters, front, g_stepContact);
+  const uint8_t next = learn::encodeState(front, left, right, g_stepAction);
+  learn::update(g_stepState, g_stepAction, reward, next);
+
+  ++g_sessSteps;
+  g_sessRewardSum += reward;
+  if (g_stepContact) ++g_sessContacts;
+  if (meters > cfg::kLearnProgressM) g_learnProgressMs = now;
+  g_prevAction = g_stepAction;
+  g_stepActive = false;
+
+  // Same rule as roaming: this long without progress means it is wedged.
+  if (now - g_learnProgressMs > cfg::kAutoStuckMs) {
+    ++g_sessEscapes;
+    g_escapeLeft = tof::rangeMm(tof::kLeft) >= tof::rangeMm(tof::kRight);
+    g_escapeBackUntilMs = now + cfg::kLearnEscapeBackMs;
+    g_escapeTurnUntilMs = g_escapeBackUntilMs + cfg::kLearnEscapeTurnMs;
+    return;
+  }
+
+  if (now - g_lastCheckpointMs > cfg::kLearnCheckpointMs) {
+    g_lastCheckpointMs = now;
+    learn::requestSave();
+  }
+}
+
 // One control tick. Invoked by hal::controlLoopBegin's scheduler - as a pinned
 // RTOS task on the ESP32, cooperatively from loop() on the R4.
 void step() {
@@ -338,6 +517,7 @@ void step() {
   int16_t reqLeft;
   int16_t reqRight;
   uint8_t bumpReason = 0;
+  Mode stoppedSession = Mode::kIdle;
   {
     hal::CriticalSection lock;
     // Roaming handles a bump itself by backing off; every other mode stops.
@@ -345,15 +525,22 @@ void step() {
       bumpReason = safety::reason() & (safety::kBumperLeft | safety::kBumperRight);
       // A broken encoder is not something the rules can drive out of.
       if ((safety::reason() & ~(safety::kBumperLeft | safety::kBumperRight)) != 0) {
+        stoppedSession = Mode::kAuto;
         g_mode = Mode::kSafetyStop;
       }
     } else if (bumped && g_mode != Mode::kSafetyStop) {
+      if (g_mode == Mode::kAuto || g_mode == Mode::kLearn) stoppedSession = g_mode;
       g_mode = Mode::kSafetyStop;
     }
     modeNow = g_mode;
     reqLeft = g_reqLeft;
     reqRight = g_reqRight;
   }
+
+  // A fault that ends a session must still close it and keep what was learned;
+  // a broken encoder wire is exactly when nobody is about to type `qs`.
+  if (stoppedSession == Mode::kLearn) learn::requestSave();
+  if (stoppedSession != Mode::kIdle) endSession(millis());
 
   switch (modeNow) {
     case Mode::kIdle:
@@ -366,7 +553,12 @@ void step() {
       stepDriveDistance();  // may call finishDrive() and change the mode
       break;
     case Mode::kAuto:
+      trackSession();
       stepAuto(bumpReason);
+      break;
+    case Mode::kLearn:
+      trackSession();
+      stepLearn();
       break;
     case Mode::kSafetyStop:
       motors::brake();
@@ -408,6 +600,9 @@ void requestIdle() {
   // Read the latch before taking the lock: safety:: takes a lock of its own,
   // and nesting critical sections is a deadlock waiting to happen.
   const bool bumped = safety::tripped();
+  const Mode was = mode();
+  if (was == Mode::kLearn) learn::requestSave();
+  if (was == Mode::kAuto || was == Mode::kLearn) endSession(millis());
   hal::CriticalSection lock;
   g_mode = bumped ? Mode::kSafetyStop : Mode::kIdle;
   g_reqLeft = 0;
@@ -425,6 +620,8 @@ void requestManual(int16_t leftDuty, int16_t rightDuty) {
 bool requestAuto() {
   if (safety::tripped()) return false;
   const uint32_t now = millis();
+  // Outside the lock: it reads the encoders, which take a lock of their own.
+  beginSession(Mode::kAuto, now);
   hal::CriticalSection lock;
   g_roam = Roam::kCruise;
   g_roamUntilMs = now;
@@ -435,6 +632,39 @@ bool requestAuto() {
   resetRangeWindow(now);
   g_mode = Mode::kAuto;
   return true;
+}
+
+bool requestLearn() {
+  if (safety::tripped()) return false;
+  const uint32_t now = millis();
+  // Outside the lock: it reads the encoders, which take a lock of their own.
+  beginSession(Mode::kLearn, now);
+  hal::CriticalSection lock;
+  g_stepActive = false;
+  g_prevAction = learn::kForward;
+  g_learnProgressMs = now;
+  g_lastCheckpointMs = now;
+  g_escapeBackUntilMs = 0;
+  g_escapeTurnUntilMs = 0;
+  g_autoStopReason = nullptr;
+  resetRangeWindow(now);
+  g_mode = Mode::kLearn;
+  return true;
+}
+
+SessionStats sessionStats() {
+  const uint32_t now = millis();
+  SessionStats s{};
+  hal::CriticalSection lock;
+  s.mode = g_sessMode;
+  s.running = g_sessMode != Mode::kIdle && g_sessEndedMs == 0;
+  s.elapsedMs = (s.running ? now : g_sessEndedMs) - g_sessStartedMs;
+  s.forwardMeters = static_cast<float>(g_sessForwardCounts) / encoders::countsPerMeter();
+  s.contacts = g_sessContacts;
+  s.escapes = g_sessEscapes;
+  s.learnSteps = g_sessSteps;
+  s.meanReward = g_sessSteps ? g_sessRewardSum / static_cast<float>(g_sessSteps) : 0.0f;
+  return s;
 }
 
 const char* autoStopReason() { return g_autoStopReason; }
@@ -477,6 +707,7 @@ const char* modeName(Mode m) {
     case Mode::kManual: return "manual";
     case Mode::kDriveDistance: return "drive";
     case Mode::kAuto: return "auto";
+    case Mode::kLearn: return "learn";
     case Mode::kSafetyStop: return "SAFETY-STOP";
   }
   return "?";

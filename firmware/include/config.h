@@ -137,6 +137,54 @@ constexpr uint32_t kAutoStuckMs     = 10000;
 constexpr uint32_t kAutoMaxRunMs    = 180000;
 constexpr uint16_t kCruiseRunTicks  = kLoopHz / 2;
 
+// --- On-device Q-learning (Phase 3) -----------------------------------------
+// Same sensors, same duties, same contact detector as roaming, so the two are
+// compared on the robot's behaviour and not on different hardware settings.
+//
+// State = front band x side band x previous action = 3 x 3 x 4 = 36.
+// kLearnFarMm only means something once the sensors are tilted; while they see
+// the floor at ~180 mm almost everything lands in the middle band, and the
+// learner can only tell "very close" from "not very close". That is a limit of
+// the robot, not of the algorithm - suspect it first if learning looks weak.
+constexpr uint16_t kLearnNearMm = kFrontBlockedMm;
+constexpr uint16_t kLearnFarMm  = 300;
+
+// One decision holds for this long. Shorter and a single action cannot move
+// the robot far enough to change its reward; longer and it drives into walls
+// before it can react.
+constexpr uint32_t kLearnStepMs = 200;
+
+constexpr float kLearnAlpha = 0.2f;   // learning rate
+constexpr float kLearnGamma = 0.9f;   // discount: ~10 steps (2 s) of foresight
+// Exploration starts high and decays per step; it is stored with the table, so
+// a robot that has already learned does not go back to flailing after reboot.
+constexpr float kEpsilonStart = 0.30f;
+constexpr float kEpsilonMin   = 0.05f;
+constexpr float kEpsilonDecay = 0.999f;  // ~halves every 700 steps (~2.3 min)
+
+// Reward draft - to be tuned against measured runs, not guessed further.
+// Forward progress pays per metre from the encoders, so reversing costs the
+// same automatically. Turning is cheap but not free, or spinning in place
+// becomes a way to never be near anything. Contact is the only big number.
+constexpr float kRewardPerMeter = 30.0f;
+constexpr float kTurnCost       = 0.1f;
+constexpr float kNearCost       = 1.0f;
+constexpr float kContactCost    = 10.0f;
+
+// Learning runs are long; the session cap is ten minutes instead of three.
+// Getting stuck does not end a learning session: a scripted backup-and-turn
+// frees the robot and learning continues, because a learner that is switched
+// off every time it fails never sees what follows its worst decisions.
+constexpr uint32_t kLearnMaxRunMs    = 600000;
+constexpr float    kLearnProgressM   = 0.02f;   // a step that moved this far
+constexpr uint32_t kLearnEscapeBackMs = 600;
+constexpr uint32_t kLearnEscapeTurnMs = 700;
+
+// Checkpoint cadence. The R4 writes EEPROM from the same thread as the control
+// loop, so the motors coast for the duration of a save; `q` reports how long
+// that actually took. Rare enough to keep data-flash wear negligible.
+constexpr uint32_t kLearnCheckpointMs = 60000;
+
 // --- Sensors ----------------------------------------------------------------
 constexpr uint32_t kI2cFreqHz         = 400000;
 constexpr uint32_t kTofTimingBudgetUs = 20000;  // one measurement per loop tick

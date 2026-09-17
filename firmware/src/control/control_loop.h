@@ -14,6 +14,7 @@ enum class Mode : uint8_t {
   kDriveDistance = 2,  // closed-loop straight line, for calibration
   kSafetyStop = 3,     // bumper latched; needs an explicit clear
   kAuto = 4,           // roaming on hand-written rules (Phase 2 baseline)
+  kLearn = 5,          // roaming on the Q-table, learning as it goes (Phase 3)
 };
 
 struct LoopStats {
@@ -45,6 +46,25 @@ struct RoamStatus {
   uint32_t elapsedMs;        // age of the session cap
 };
 RoamStatus roamStatus();
+
+// Start roaming on the Q-table. Stops on `s` or the session cap; getting stuck
+// triggers a scripted escape instead of a stop.
+bool requestLearn();
+
+// One measuring stick for roaming and learning, or the Phase 3 exit criterion
+// ("beats the rule-based baseline") has nothing to compare. Counts from the
+// start of the latest `a` or `l` session; frozen once it ends.
+struct SessionStats {
+  Mode mode;                // kAuto or kLearn; kIdle before any session
+  bool running;
+  uint32_t elapsedMs;
+  float forwardMeters;      // encoder distance driven forwards, reversing ignored
+  uint16_t contacts;        // ranges went still with something near
+  uint16_t escapes;         // scripted backup-and-turn after no progress
+  uint32_t learnSteps;      // decisions taken this session
+  float meanReward;         // over those decisions
+};
+SessionStats sessionStats();
 
 Mode mode();
 const char* modeName(Mode m);

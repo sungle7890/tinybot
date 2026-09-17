@@ -75,13 +75,23 @@ uint32_t g_maxAcceptUs = 0, g_maxPollUs = 0, g_maxReadUs = 0, g_maxWriteUs = 0;
 char g_ip[20] = "0.0.0.0";
 
 // Collects a console reply so it can be sent as an HTTP body.
+// Capped so a runaway command cannot exhaust the heap, but high enough for the
+// full `q` dump (~2 KB). Hitting the cap is said out loud: a reply that just
+// stops mid-line reads as a firmware fault.
 class StringSink : public Print {
  public:
+  static constexpr size_t kMaxReply = 3000;
   size_t write(uint8_t c) override {
-    if (text.length() < 900) text += static_cast<char>(c);
+    if (text.length() < kMaxReply) {
+      text += static_cast<char>(c);
+    } else if (!truncated) {
+      truncated = true;
+      text += "\n...(reply truncated)\n";
+    }
     return 1;
   }
   String text;
+  bool truncated = false;
 };
 
 void storeIp(IPAddress ip) {

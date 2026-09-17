@@ -13,7 +13,10 @@ extern "C" char* sbrk(int increment);
 namespace hal {
 namespace {
 
-constexpr int kEepromBase = 0;
+// The calibration blob has lived at offset 0 since Phase 1; moving it would
+// orphan the value already stored on the robot. The Q-table goes after it,
+// with room for the calibration to grow.
+int slotBase(Slot slot) { return slot == Slot::kCalibration ? 0 : 64; }
 
 // Leave this much of the period untouched after a write, so a line that
 // finishes late still does not push the tick past its jitter budget.
@@ -65,19 +68,30 @@ void pwmWrite(uint8_t pin, uint16_t duty, uint16_t dutyMax) {
 int fastRead(uint8_t pin) { return digitalRead(pin); }
 
 // --- Persistence ------------------------------------------------------------
-bool persistLoad(void* data, size_t len) {
-  if (kEepromBase + static_cast<int>(len) > EEPROM.length()) return false;
+bool persistLoad(Slot slot, void* data, size_t len) {
+  const int base = slotBase(slot);
+  if (base + static_cast<int>(len) > EEPROM.length()) return false;
   uint8_t* out = static_cast<uint8_t*>(data);
-  for (size_t i = 0; i < len; ++i) out[i] = EEPROM.read(kEepromBase + i);
+  for (size_t i = 0; i < len; ++i) out[i] = EEPROM.read(base + i);
   return true;
 }
 
-bool persistSave(const void* data, size_t len) {
-  if (kEepromBase + static_cast<int>(len) > EEPROM.length()) return false;
+bool persistSave(Slot slot, const void* data, size_t len) {
+  const int base = slotBase(slot);
+  if (base + static_cast<int>(len) > EEPROM.length()) return false;
   const uint8_t* in = static_cast<const uint8_t*>(data);
   // EEPROM.update only writes changed bytes, which matters: the RA4M1 data
   // flash has a finite erase count and the Q-table will checkpoint often.
-  for (size_t i = 0; i < len; ++i) EEPROM.update(kEepromBase + i, in[i]);
+  for (size_t i = 0; i < len; ++i) EEPROM.update(base + i, in[i]);
+  return true;
+}
+
+bool persistByteAddressable() { return true; }
+
+bool persistWriteByte(Slot slot, size_t offset, uint8_t value) {
+  const int at = slotBase(slot) + static_cast<int>(offset);
+  if (at >= EEPROM.length()) return false;
+  EEPROM.update(at, value);
   return true;
 }
 

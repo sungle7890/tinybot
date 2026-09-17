@@ -52,7 +52,7 @@ void begin() {
   attachInterrupt(digitalPinToInterrupt(pins::kRightEncA), onRightEdge, CHANGE);
 
   PersistBlob blob{};
-  if (hal::persistLoad(&blob, sizeof(blob)) && blob.magic == kPersistMagic &&
+  if (hal::persistLoad(hal::Slot::kCalibration, &blob, sizeof(blob)) && blob.magic == kPersistMagic &&
       blob.countsPerMeter > 1.0f) {
     g_countsPerMeter = blob.countsPerMeter;
   }
@@ -91,7 +91,7 @@ bool setCountsPerMeter(float value) {
   g_countsPerMeter = value;
 
   PersistBlob blob{kPersistMagic, value};
-  return hal::persistSave(&blob, sizeof(blob));
+  return hal::persistSave(hal::Slot::kCalibration, &blob, sizeof(blob));
 }
 
 bool calibrateFrom(float commandedMeters, float measuredMeters) {

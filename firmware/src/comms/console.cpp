@@ -10,6 +10,7 @@
 #include "config.h"
 #include "control/control_loop.h"
 #include "hal/hal.h"
+#include "learn/qlearn.h"
 #include "drive/encoders.h"
 #include "drive/motors.h"
 #include "safety/safety.h"
@@ -46,6 +47,10 @@ void printHelp() {
       "  m <l> <r>      manual duty, -1000..1000 each\n"
       "  f <duty>       both wheels at <duty>\n"
       "  a              roam on the rule-based behaviour (self-stops)\n"
+      "  l              roam and learn on the Q-table (10 min cap)\n"
+      "  q              Q-table, epsilon, checkpoint info\n"
+      "  qs             save the Q-table now\n"
+      "  qz             forget everything learned\n"
       "  s              stop (coast)\n"
       "  b              brake\n"
       "  e              encoder counts and metres\n"
@@ -73,6 +78,20 @@ void cmdStatus() {
                 r.state, static_cast<unsigned>(r.cruiseRunTicks),
                 static_cast<unsigned long>(r.sinceProgressMs),
                 static_cast<unsigned long>(r.elapsedMs));
+  }
+  const control::SessionStats ss = control::sessionStats();
+  if (ss.mode != control::Mode::kIdle) {
+    fmt::printf("session       : %s%s, %.1f s, %.2f m forward, %u contacts, "
+                "%u escapes\n",
+                control::modeName(ss.mode), ss.running ? " (running)" : "",
+                ss.elapsedMs / 1000.0f, ss.forwardMeters,
+                static_cast<unsigned>(ss.contacts),
+                static_cast<unsigned>(ss.escapes));
+    if (ss.mode == control::Mode::kLearn) {
+      fmt::printf("learning      : %lu steps, mean reward %+.2f, epsilon %.3f\n",
+                  static_cast<unsigned long>(ss.learnSteps), ss.meanReward,
+                  learn::epsilon());
+    }
   }
   if (const char* stopped = control::autoStopReason()) {
     fmt::printf("roam ended    : %s\n", stopped);
@@ -112,6 +131,43 @@ void cmdStatus() {
   }
   fmt::printf("free memory   : %lu bytes\n",
                 static_cast<unsigned long>(hal::freeBytes()));
+}
+
+void cmdQTable() {
+  fmt::printf("table   : %s, %lu steps total, epsilon %.3f\n",
+              learn::loadedFromCheckpoint() ? "loaded from checkpoint" : "blank at boot",
+              static_cast<unsigned long>(learn::steps()), learn::epsilon());
+  fmt::printf("saves   : %lu this boot, last %u bytes in %lu ms, longest %lu ms%s\n",
+              static_cast<unsigned long>(learn::saves()),
+              static_cast<unsigned>(learn::lastSaveBytes()),
+              static_cast<unsigned long>(learn::lastSaveMs()),
+              static_cast<unsigned long>(learn::longestSaveMs()),
+              learn::savePending() ? " (save pending)" : "");
+  // Rows: front band (near/mid/far), side (none/wall left/wall right),
+  // previous action. Printing only visited rows keeps the dump readable.
+  static const char* const kFront[] = {"near", "mid ", "far "};
+  static const char* const kSide[] = {"open  ", "wall-L", "wall-R"};
+  fmt::println("state             prev  |   fwd   left  right   back  best");
+  uint8_t shown = 0;
+  for (uint8_t s = 0; s < learn::kStateCount; ++s) {
+    bool visited = false;
+    uint8_t best = 0;
+    for (uint8_t a = 0; a < learn::kActionCount; ++a) {
+      if (learn::q(s, a) != 0.0f) visited = true;
+      if (learn::q(s, a) > learn::q(s, best)) best = a;
+    }
+    if (!visited) continue;
+    ++shown;
+    const uint8_t prev = s % learn::kActionCount;
+    const uint8_t side = (s / learn::kActionCount) % 3;
+    const uint8_t front = (s / learn::kActionCount) / 3;
+    fmt::printf("%s %s  %-5s |", kFront[front], kSide[side], learn::actionName(prev));
+    for (uint8_t a = 0; a < learn::kActionCount; ++a) {
+      fmt::printf(" %6.2f", learn::q(s, a));
+    }
+    fmt::printf("  %s\n", learn::actionName(best));
+  }
+  if (shown == 0) fmt::println("(nothing learned yet)");
 }
 
 void cmdJitter() {
@@ -231,6 +287,27 @@ void dispatch(char* line) {
                   static_cast<unsigned long>(cfg::kAutoMaxRunMs / 1000));
     } else {
       fmt::println("refused: safety is latched");
+    }
+  } else if (!strcmp(cmd, "l")) {
+    if (control::requestLearn()) {
+      fmt::printf("learning - stops on `s` or after %lu s; saves every %lu s\n",
+                  static_cast<unsigned long>(cfg::kLearnMaxRunMs / 1000),
+                  static_cast<unsigned long>(cfg::kLearnCheckpointMs / 1000));
+    } else {
+      fmt::println("refused: safety is latched");
+    }
+  } else if (!strcmp(cmd, "q")) {
+    cmdQTable();
+  } else if (!strcmp(cmd, "qs")) {
+    learn::requestSave();
+    fmt::println("save requested - check `q` for the write time");
+  } else if (!strcmp(cmd, "qz")) {
+    if (control::mode() == control::Mode::kLearn) {
+      fmt::println("refused: stop learning first (s)");
+    } else {
+      learn::reset();
+      learn::requestSave();
+      fmt::println("Q-table cleared and saved blank");
     }
   } else if (!strcmp(cmd, "s")) {
     control::requestIdle();
