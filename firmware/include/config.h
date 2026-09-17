@@ -78,14 +78,26 @@ constexpr uint32_t kDriveTimeoutMs = 15000;
 // --- Rule-based roaming (Phase 2) -------------------------------------------
 // Deliberately simple: this is the baseline that Phase 3's learned policy has
 // to beat, so it must be honest hand-written behaviour, not a tuned showpiece.
-constexpr int16_t  kAutoCruiseDuty = 320;
-constexpr int16_t  kAutoTurnDuty   = 300;
-constexpr int16_t  kAutoBackDuty   = 280;
+// TEMPORARY, 2026-09-16. The three ToF sensors are mounted level about 40 mm
+// up, so the lower edge of their 25-degree cone lands on the floor and every
+// one of them reports 177-235 mm in an empty room. With the real thresholds
+// the robot is permanently "blocked" and only ever spins in place - measured,
+// not theorised. Until the sensors are tilted up ~10 degrees the thresholds
+// have to duck *under* the floor reading, which leaves barely 50 mm of warning,
+// so the robot also has to crawl. This is a stopgap that mostly hands obstacle
+// avoidance to the bumpers; it is not the Phase 3 baseline.
+//
+// Once the mounting is fixed, restore:
+//   kAutoCruiseDuty 320, kAutoTurnDuty 300, kAutoBackDuty 280, kSteerBias 120,
+//   kFrontBlockedMm 220, kFrontClearMm 320, kSideNearMm 200.
+constexpr int16_t  kAutoCruiseDuty = 190;
+constexpr int16_t  kAutoTurnDuty   = 250;   // still has to break static friction
+constexpr int16_t  kAutoBackDuty   = 200;
 
-constexpr uint16_t kFrontBlockedMm = 220;   // turn away below this
-constexpr uint16_t kFrontClearMm   = 320;   // resume cruising above this
-constexpr uint16_t kSideNearMm     = 200;   // steer away from a close wall
-constexpr int16_t  kSteerBias      = 120;   // duty difference while steering
+constexpr uint16_t kFrontBlockedMm = 135;   // turn away below this
+constexpr uint16_t kFrontClearMm   = 155;   // resume cruising above this
+constexpr uint16_t kSideNearMm     = 130;   // steer away from a close wall
+constexpr int16_t  kSteerBias      = 70;    // duty difference while steering
 
 constexpr uint32_t kBackupMs = 600;         // after a bump
 constexpr uint32_t kTurnMinMs = 350;        // so a turn always commits

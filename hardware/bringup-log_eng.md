@@ -134,3 +134,100 @@ cannot see this: unequal effective wheel diameter, slip, or caster drag. The fix
 is **heading correction from the gyro**, kept for Phase 2.
 
 **Phase 1 complete.**
+
+---
+
+## Phase 2 — rule-based roaming (2026-09-16)
+
+### First attempt: it only ever spun in place
+
+Put on the floor and sent `a`. The robot **never once entered its cruising state** —
+it was turning 200 ms in — and because the radio link drops commands, **the only way
+to stop it was to pull the battery.**
+
+Two faults compounded.
+
+**① The only way to stop it was the radio.** A turn ends when the front clears; if it
+never clears, the robot backs up and turns again. Nothing outside that loop could break
+it except an `s` command, and those get dropped. Fixed by making the firmware give up on
+its own: ten seconds without progress, and a session cap (commit f02d371).
+
+**② All three range sensors were looking at the floor.** This was the real cause.
+
+### Floor reflection — measured
+
+Same spot, robot on the floor versus lifted 20 cm:
+
+| | on the floor | lifted 20 cm |
+|---|---|---|
+| front | 177-185 mm | 319-526 mm |
+| left | 189-228 mm | 711-730 mm |
+| right | 203-235 mm | 660-716 mm |
+
+Front, left and right all reading ~20 cm in the middle of an open room is physically
+impossible. The ToF range sensor (VL53L0X) emits a **25-degree cone**, not a point, so
+mounted level its lower edge meets the floor quickly, and that spot becomes "the nearest
+object". Catching the floor at 180 mm means the sensors sit about **40 mm** up
+(180 x tan 12.5 deg ~= 40).
+
+With the threshold at 220 mm, the robot considered itself blocked in an empty room.
+
+### The fix: tilt the sensors up
+
+Raising them barely helps: doubling the height to 80 mm only pushes the floor out to
+360 mm.
+
+Distance at which the floor is caught, for a 40 mm mounting height:
+
+| tilt up | floor caught at |
+|---|---|
+| 0 deg (now) | 0.18 m |
+| 6 deg | 0.35 m |
+| 8 deg | 0.51 m |
+| **10 deg** | **0.92 m** |
+| 11 deg | 1.5 m |
+
+**10 degrees is the sweet spot.** Beyond that the robot starts missing low obstacles —
+thresholds, chair-leg feet. At 10 degrees it still sweeps near floor level out to 0.9 m.
+**Open — next task.**
+
+### Temporary workaround (to be reverted)
+
+To see the robot actually drive before the mounting is fixed, the thresholds were dropped
+*below* the floor reading and the speeds cut. The values to restore are named in the
+TEMPORARY comment block in `firmware/include/config.h`.
+
+| | real | temporary |
+|---|---|---|
+| front clear | 320 mm | 155 mm |
+| front blocked | 220 mm | 135 mm |
+| side near | 200 mm | 130 mm |
+| cruise duty | 320 | 190 |
+| turn duty | 300 | 250 |
+| backup duty | 280 | 200 |
+
+### Second and third runs
+
+With the workaround the robot did drive: 143 seconds, mostly cruising, two turns.
+
+As expected it **drives into walls**. The front sensor only sees a wall once it is within
+13.5 cm, and starting a spin-in-place at that distance is already too late. Nothing to be
+done here until the mounting angle is fixed.
+
+### Open problem: the bumpers never reach the wall
+
+**In 143 seconds of roaming the bumpers never once fired** (`safety : ok` throughout, zero
+`backup` states) — while the robot was visibly hitting walls. The switches themselves are
+fine; both were pressed by hand and confirmed during assembly.
+
+So **something else touches the wall before the bumper does** — most likely the bumper bar
+does not protrude past the chassis front or the range-sensor mounts. With the range sensors
+blinded, the bumpers are the only collision sensing left, and they are not working. **Open.**
+
+### A lesson about tooling
+
+The watchdog looked like it was not firing, so the firmware was "fixed" twice. **Both fixes
+were chasing nothing.** The actual fault was a monitoring script with no `sleep` in its
+loop: what it printed as "18 s" was four seconds of robot time. This only became visible
+after `st` was made to print the timer values themselves.
+**Do not fix what you have not put on screen.**
