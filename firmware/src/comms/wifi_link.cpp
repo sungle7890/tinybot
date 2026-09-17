@@ -55,6 +55,11 @@ String g_request;
 String g_out;
 size_t g_outPos = 0;
 uint32_t g_lastTelemetryFetchMs = 0;
+// Telemetry only queues while switched on (`v`), and `v` is a toggle a remote
+// client cannot see the state of. A fetch is an unambiguous request for data,
+// so it switches the stream on; the stream goes back off once fetching stops,
+// but only if it was a fetch that turned it on - never a `v` typed over USB.
+bool g_telemetryOnForWifi = false;
 uint32_t g_clientStartedMs = 0;
 uint32_t g_lastAcceptMs = 0;
 bool g_up = false;
@@ -140,6 +145,10 @@ bool pumpResponse() {
 void handle(WiFiClient& c, const String& path) {
   if (path.startsWith("/api/telemetry")) {
     g_lastTelemetryFetchMs = millis();
+    if (!telemetry::enabled()) {
+      telemetry::setEnabled(true);
+      g_telemetryOnForWifi = true;
+    }
     String body;
     telemetry::Sample s;
     for (uint8_t n = 0; n < kTelemetryBatch && telemetry::pop(s); ++n) {
@@ -215,6 +224,10 @@ bool begin() {
 
 void service() {
   if (!g_up) return;
+  if (g_telemetryOnForWifi && millis() - g_lastTelemetryFetchMs >= 3000) {
+    g_telemetryOnForWifi = false;
+    if (telemetry::enabled()) telemetry::setEnabled(false);
+  }
   if (hal::microsUntilNextTick() < kHeadroomUs) return;
 
   // Finish sending before looking at anything else.

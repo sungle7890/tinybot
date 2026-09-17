@@ -411,6 +411,11 @@ void driveAction(learn::Action action) {
 }
 
 float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool contact) {
+  // Encoders count wheel turns, not travel: pinned against a wall, a slipping
+  // wheel still reports progress. On a step that ended in contact the ranges
+  // have already said the robot went nowhere, so forward distance earns
+  // nothing - otherwise pushing into a wall pays for part of its own penalty.
+  if (contact && meters > 0.0f) meters = 0.0f;
   float reward = cfg::kRewardPerMeter * meters;
   if (action == learn::kTurnLeft || action == learn::kTurnRight) reward -= cfg::kTurnCost;
   if (frontMm < cfg::kFrontBlockedMm) reward -= cfg::kNearCost;
