@@ -45,6 +45,7 @@ void printHelp() {
       "  st             status\n"
       "  m <l> <r>      manual duty, -1000..1000 each\n"
       "  f <duty>       both wheels at <duty>\n"
+      "  a              roam on the rule-based behaviour (self-stops)\n"
       "  s              stop (coast)\n"
       "  b              brake\n"
       "  e              encoder counts and metres\n"
@@ -65,6 +66,17 @@ void cmdStatus() {
   const control::LoopStats s = control::stats();
   fmt::printf("mode          : %s\n",
                 control::modeName(control::mode()));
+  if (control::mode() == control::Mode::kAuto) {
+    const control::RoamStatus r = control::roamStatus();
+    fmt::printf("roam          : %s, run %u ticks, no progress %lu ms, "
+                "elapsed %lu ms\n",
+                r.state, static_cast<unsigned>(r.cruiseRunTicks),
+                static_cast<unsigned long>(r.sinceProgressMs),
+                static_cast<unsigned long>(r.elapsedMs));
+  }
+  if (const char* stopped = control::autoStopReason()) {
+    fmt::printf("roam ended    : %s\n", stopped);
+  }
   const uint8_t reason = safety::reason();
   char why[64] = "";
   if (reason & safety::kBumperLeft) strcat(why, " bumper-L");
@@ -211,6 +223,15 @@ void dispatch(char* line) {
     const int16_t duty = static_cast<int16_t>(strtol(argv[1], nullptr, 10));
     control::requestManual(duty, duty);
     fmt::println("ok");
+  } else if (!strcmp(cmd, "a")) {
+    if (control::requestAuto()) {
+      fmt::printf("roaming - stops on `s`, after %lu s of no clear path, "
+                  "or after %lu s total\n",
+                  static_cast<unsigned long>(cfg::kAutoStuckMs / 1000),
+                  static_cast<unsigned long>(cfg::kAutoMaxRunMs / 1000));
+    } else {
+      fmt::println("refused: safety is latched");
+    }
   } else if (!strcmp(cmd, "s")) {
     control::requestIdle();
     fmt::println("ok");

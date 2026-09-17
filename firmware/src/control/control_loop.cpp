@@ -43,6 +43,18 @@ int32_t g_prevLeft = 0, g_prevRight = 0;
 uint16_t g_stillTicks = 0;
 uint32_t g_seenResetGeneration = 0;
 
+// Roaming state. A manoeuvre runs until its deadline so the robot commits to a
+// decision instead of dithering on the threshold.
+enum class Roam : uint8_t { kCruise, kTurn, kBackup };
+Roam g_roam = Roam::kCruise;
+uint32_t g_roamUntilMs = 0;
+bool g_turnLeft = false;
+
+uint32_t g_autoStartedMs = 0;
+uint32_t g_lastCruiseMs = 0;
+uint16_t g_cruiseRunTicks = 0;
+const char* g_autoStopReason = nullptr;
+
 void recordTick(uint32_t periodUs) {
   ++g_ticks;
   if (periodUs < g_minUs) g_minUs = periodUs;
@@ -143,6 +155,109 @@ void stepDriveDistance() {
   g_driveTravelled = travelled;
 }
 
+// Picks the side with more room. Out-of-range counts as open, which is what
+// we want: nothing seen that way means nothing in the way.
+bool moreRoomOnLeft() {
+  return tof::rangeMm(tof::kLeft) >= tof::rangeMm(tof::kRight);
+}
+
+// Ends roaming from inside the control loop. Mirrors finishDrive: brake first,
+// then take the lock only for the mode write.
+void finishAuto(const char* reason) {
+  motors::brake();
+  hal::CriticalSection lock;
+  g_autoStopReason = reason;
+  g_mode = Mode::kIdle;
+}
+
+void beginTurn(bool left, uint32_t ms) {
+  g_roam = Roam::kTurn;
+  g_turnLeft = left;
+  g_roamUntilMs = millis() + ms;
+}
+
+// One pass of the hand-written avoidance rules. No learning here: this is the
+// baseline Phase 3 has to beat (docs/04-roadmap.md).
+void stepAuto(uint8_t bumped) {
+  const uint32_t now = millis();
+
+  // Escape hatches first. Everything below this point can loop forever on its
+  // own terms - a turn that never finds a clear front just becomes a backup,
+  // which becomes another turn - and the radio link is not a dependable stop.
+  if (now - g_lastCruiseMs > cfg::kAutoStuckMs) {
+    finishAuto("stuck: no clear path found, evading too long");
+    return;
+  }
+  if (now - g_autoStartedMs > cfg::kAutoMaxRunMs) {
+    finishAuto("session time limit reached");
+    return;
+  }
+
+  // Zero the run up front so every path that is not cruising breaks the run by
+  // doing nothing; only the cruise branch below restores it from runBefore.
+  const uint16_t runBefore = g_cruiseRunTicks;
+  g_cruiseRunTicks = 0;
+
+  // A bump outranks everything: back off, then turn away from the side hit.
+  if (bumped != safety::kNone) {
+    safety::clear();
+    g_roam = Roam::kBackup;
+    g_turnLeft = (bumped & safety::kBumperRight) != 0;
+    g_roamUntilMs = now + cfg::kBackupMs;
+  }
+
+  switch (g_roam) {
+    case Roam::kBackup:
+      motors::set(-cfg::kAutoBackDuty, -cfg::kAutoBackDuty);
+      if (static_cast<int32_t>(now - g_roamUntilMs) >= 0) {
+        beginTurn(g_turnLeft, cfg::kTurnMinMs * 2);
+      }
+      return;
+
+    case Roam::kTurn: {
+      const int16_t duty = cfg::kAutoTurnDuty;
+      motors::set(g_turnLeft ? -duty : duty, g_turnLeft ? duty : -duty);
+      const bool committed = static_cast<int32_t>(now - g_roamUntilMs) >= 0;
+      const bool clear = tof::fresh(tof::kFront) &&
+                         tof::rangeMm(tof::kFront) > cfg::kFrontClearMm;
+      if (committed && clear) g_roam = Roam::kCruise;
+      // Turning forever means it is boxed in; back out and try again.
+      if (static_cast<int32_t>(now - g_roamUntilMs) > static_cast<int32_t>(cfg::kTurnMaxMs)) {
+        g_roam = Roam::kBackup;
+        g_roamUntilMs = now + cfg::kBackupMs;
+      }
+      return;
+    }
+
+    case Roam::kCruise:
+    default: {
+      // A sensor that has stopped reporting is not "nothing ahead": stop.
+      if (!tof::fresh(tof::kFront)) {
+        motors::coast();
+        return;
+      }
+      const uint16_t front = tof::rangeMm(tof::kFront);
+      if (front < cfg::kFrontBlockedMm) {
+        beginTurn(moreRoomOnLeft(), cfg::kTurnMinMs);
+        return;
+      }
+      // Ease away from a wall that is close on one side.
+      int16_t bias = 0;
+      if (tof::fresh(tof::kLeft) && tof::rangeMm(tof::kLeft) < cfg::kSideNearMm) {
+        bias = cfg::kSteerBias;
+      } else if (tof::fresh(tof::kRight) &&
+                 tof::rangeMm(tof::kRight) < cfg::kSideNearMm) {
+        bias = -cfg::kSteerBias;
+      }
+      // Progress is a sustained run, not a single tick: see kCruiseRunTicks.
+      g_cruiseRunTicks = runBefore + 1;
+      if (g_cruiseRunTicks >= cfg::kCruiseRunTicks) g_lastCruiseMs = now;
+      motors::set(cfg::kAutoCruiseDuty + bias, cfg::kAutoCruiseDuty - bias);
+      return;
+    }
+  }
+}
+
 // One control tick. Invoked by hal::controlLoopBegin's scheduler - as a pinned
 // RTOS task on the ESP32, cooperatively from loop() on the R4.
 void step() {
@@ -163,9 +278,19 @@ void step() {
   Mode modeNow;
   int16_t reqLeft;
   int16_t reqRight;
+  uint8_t bumpReason = 0;
   {
     hal::CriticalSection lock;
-    if (bumped && g_mode != Mode::kSafetyStop) g_mode = Mode::kSafetyStop;
+    // Roaming handles a bump itself by backing off; every other mode stops.
+    if (bumped && g_mode == Mode::kAuto) {
+      bumpReason = safety::reason() & (safety::kBumperLeft | safety::kBumperRight);
+      // A broken encoder is not something the rules can drive out of.
+      if ((safety::reason() & ~(safety::kBumperLeft | safety::kBumperRight)) != 0) {
+        g_mode = Mode::kSafetyStop;
+      }
+    } else if (bumped && g_mode != Mode::kSafetyStop) {
+      g_mode = Mode::kSafetyStop;
+    }
     modeNow = g_mode;
     reqLeft = g_reqLeft;
     reqRight = g_reqRight;
@@ -180,6 +305,9 @@ void step() {
       break;
     case Mode::kDriveDistance:
       stepDriveDistance();  // may call finishDrive() and change the mode
+      break;
+    case Mode::kAuto:
+      stepAuto(bumpReason);
       break;
     case Mode::kSafetyStop:
       motors::brake();
@@ -235,6 +363,35 @@ void requestManual(int16_t leftDuty, int16_t rightDuty) {
   g_mode = Mode::kManual;
 }
 
+bool requestAuto() {
+  if (safety::tripped()) return false;
+  const uint32_t now = millis();
+  hal::CriticalSection lock;
+  g_roam = Roam::kCruise;
+  g_roamUntilMs = now;
+  g_autoStartedMs = now;
+  g_lastCruiseMs = now;
+  g_autoStopReason = nullptr;
+  g_mode = Mode::kAuto;
+  return true;
+}
+
+const char* autoStopReason() { return g_autoStopReason; }
+
+RoamStatus roamStatus() {
+  const uint32_t now = millis();
+  RoamStatus s{};
+  switch (g_roam) {
+    case Roam::kTurn: s.state = "turn"; break;
+    case Roam::kBackup: s.state = "backup"; break;
+    default: s.state = "cruise"; break;
+  }
+  s.cruiseRunTicks = g_cruiseRunTicks;
+  s.sinceProgressMs = now - g_lastCruiseMs;
+  s.elapsedMs = now - g_autoStartedMs;
+  return s;
+}
+
 bool requestDriveDistance(float meters) {
   if (safety::tripped()) return false;
   if (!(fabsf(meters) > kArrivedMeters)) return false;
@@ -258,6 +415,7 @@ const char* modeName(Mode m) {
     case Mode::kIdle: return "idle";
     case Mode::kManual: return "manual";
     case Mode::kDriveDistance: return "drive";
+    case Mode::kAuto: return "auto";
     case Mode::kSafetyStop: return "SAFETY-STOP";
   }
   return "?";

@@ -13,6 +13,7 @@ enum class Mode : uint8_t {
   kManual = 1,         // duties set from the console
   kDriveDistance = 2,  // closed-loop straight line, for calibration
   kSafetyStop = 3,     // bumper latched; needs an explicit clear
+  kAuto = 4,           // roaming on hand-written rules (Phase 2 baseline)
 };
 
 struct LoopStats {
@@ -29,6 +30,21 @@ void begin();
 void requestIdle();
 void requestManual(int16_t leftDuty, int16_t rightDuty);
 bool requestDriveDistance(float meters);
+
+// Start roaming. Stops on `s`, or on a fault the rules cannot recover from.
+bool requestAuto();
+
+// Why roaming last ended, for the console to report. nullptr until it has run.
+// Roaming gives up on its own because the radio link is not a reliable stop.
+const char* autoStopReason();
+
+struct RoamStatus {
+  const char* state;         // cruise / turn / backup
+  uint16_t cruiseRunTicks;   // consecutive cruising ticks so far
+  uint32_t sinceProgressMs;  // age of the stuck watchdog
+  uint32_t elapsedMs;        // age of the session cap
+};
+RoamStatus roamStatus();
 
 Mode mode();
 const char* modeName(Mode m);

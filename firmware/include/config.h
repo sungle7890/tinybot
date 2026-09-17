@@ -75,6 +75,34 @@ constexpr float    kHeadingKp      = 1.2f;  // duty per count of L/R divergence
 constexpr int16_t  kHeadingCorrMax = 250;
 constexpr uint32_t kDriveTimeoutMs = 15000;
 
+// --- Rule-based roaming (Phase 2) -------------------------------------------
+// Deliberately simple: this is the baseline that Phase 3's learned policy has
+// to beat, so it must be honest hand-written behaviour, not a tuned showpiece.
+constexpr int16_t  kAutoCruiseDuty = 320;
+constexpr int16_t  kAutoTurnDuty   = 300;
+constexpr int16_t  kAutoBackDuty   = 280;
+
+constexpr uint16_t kFrontBlockedMm = 220;   // turn away below this
+constexpr uint16_t kFrontClearMm   = 320;   // resume cruising above this
+constexpr uint16_t kSideNearMm     = 200;   // steer away from a close wall
+constexpr int16_t  kSteerBias      = 120;   // duty difference while steering
+
+constexpr uint32_t kBackupMs = 600;         // after a bump
+constexpr uint32_t kTurnMinMs = 350;        // so a turn always commits
+constexpr uint32_t kTurnMaxMs = 1600;       // give up and back off instead
+
+// Escape hatches. Roaming runs untethered, and the only other way to stop the
+// robot is to pull its battery, so the firmware has to give up on its own.
+// kAutoStuckMs: evading this long without a single cruising tick means the
+// rules are not working here (boxed in, or a sensor lying); stop and say so.
+// kAutoMaxRunMs: a session cap, so a lost radio link cannot mean "runs forever".
+// kCruiseRunTicks: a single cruising tick is not progress. While wedged, a
+// sweeping turn keeps catching one-tick glimpses of a gap, and counting those
+// resets the watchdog forever. Only an uninterrupted run counts (0.5 s @ 50 Hz).
+constexpr uint32_t kAutoStuckMs     = 10000;
+constexpr uint32_t kAutoMaxRunMs    = 180000;
+constexpr uint16_t kCruiseRunTicks  = kLoopHz / 2;
+
 // --- Sensors ----------------------------------------------------------------
 constexpr uint32_t kI2cFreqHz         = 400000;
 constexpr uint32_t kTofTimingBudgetUs = 20000;  // one measurement per loop tick
