@@ -34,13 +34,23 @@ Loop jitter within ±2 ms of the 50 Hz period.
 > If odometry is inaccurate here, every phase-3 reward becomes a lie.
 > This is the one phase not to rush.
 
-## Phase 2 — Rule-based autonomy ← **current**
+## Phase 2 — Rule-based autonomy ✅ partly done (2026-09-17)
 
-- [ ] Obstacle avoidance via Braitenberg / subsumption
-- [ ] Hard-interrupt safety stop on bumpers and cliff sensors
+- [x] Rule-based obstacle avoidance (cruise / turn / backup state machine)
+- [x] Self-imposed stops (10 s without progress, 180 s session cap) — the radio is not a dependable stop
+- [x] Escape when pressed against a wall: all three ranges still for 2 s counts as a collision
+- [~] ~~Bumper safety stop~~ — **dropped.** Switches only; the bumper frame that would press them was never fitted
+- [~] ~~Gyro heading correction~~ — **removed** (the 10 cm/m drift to the right stays a known limitation)
+- [ ] Tilt the range sensors up 10 degrees — **deferred.** They see the floor, leaving 13.5 cm of warning (`hardware/bringup-log_eng.md`)
 - [ ] Serial telemetry streaming, plotted from `host/`
 
 **Exit**: roams a room for 10 minutes with no commands and ≤3 collisions.
+
+> **Recorded as not met, and moving on.** With no bumper there is nothing to count collisions
+> with, and sensors that see the floor mean frequent wall contact. Measured: 7.5 s cruising, then
+> boxed into a corner and self-stopped at 17 s; 143 s of roaming on the earlier settings.
+> The phase-3 baseline therefore uses **encoder forward distance and time until self-stop**
+> instead of a collision count.
 
 > **The "moves autonomously without commands" goal is already met here.**
 > Autonomy does not require AI. Confirming that before moving on is what makes

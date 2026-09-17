@@ -131,7 +131,7 @@ deviation from 486 to 31 µs.
 The 1 m run ended **about 10 cm to the right** (~5.7°), while the encoders
 disagreed by only 0.2%. Today's heading hold equalises wheel counts, so it
 cannot see this: unequal effective wheel diameter, slip, or caster drag. The fix
-is **heading correction from the gyro**, kept for Phase 2.
+would be **heading correction from the gyro**; as of 2026-09-17 it is **not planned** and stays a known limitation.
 
 **Phase 1 complete.**
 
@@ -231,3 +231,20 @@ were chasing nothing.** The actual fault was a monitoring script with no `sleep`
 loop: what it printed as "18 s" was four seconds of robot time. This only became visible
 after `st` was made to print the timer values themselves.
 **Do not fix what you have not put on screen.**
+
+### Fourth run, and decisions (2026-09-17)
+
+Observed: the robot sat **pressed against a wall**, pushing with one wheel. The cause was a steering
+bug — cruise 190 minus a steer bias of 70 left the inner wheel at 120, **exactly the motor deadband**,
+so it stopped. "Ease away from the wall" had become a one-wheel pivot. The inner wheel is now held at
+160 or more.
+
+It also turned out the bumpers are switches only: **the bumper frame was never bought**, so nothing
+can press them. Bumper polling is off; instead, all three ranges staying within 25 mm for 2 s counts
+as a collision, and the robot backs up and turns.
+
+Fourth run: 7.5 s cruising, then turn/backup cycles in a corner, then self-stop after 10 s without
+progress (17 s in all).
+
+**Decisions:** bumpers dropped, gyro correction removed, sensor tilt deferred. The phase-2 exit
+criterion (10 minutes, ≤3 collisions) is recorded as not met, and the project moves to phase 3.

@@ -99,6 +99,28 @@ constexpr uint16_t kFrontClearMm   = 155;   // resume cruising above this
 constexpr uint16_t kSideNearMm     = 130;   // steer away from a close wall
 constexpr int16_t  kSteerBias      = 70;    // duty difference while steering
 
+// Steering subtracts kSteerBias from the inner wheel, and a wheel below the
+// deadband does not turn at all: at cruise 190 and bias 70 the inner wheel sat
+// on exactly kDutyDeadband, so every "ease away from the wall" became a pivot
+// on one wheel - which is how the robot ended up pushing itself along a wall.
+// Whatever the duties are, the inner wheel has to keep driving.
+constexpr int16_t kMinMovingDuty = kDutyDeadband + 40;
+
+// The bumper switches are wired but have no bumper: the mechanical frame that
+// would press them was never fitted, so they cannot fire and the robot has no
+// contact sensing at all. Polling them only risks a spurious latch.
+constexpr bool kBumpersFitted = false;
+
+// Contact sensing has to come from the ranges instead, and a ToF sensor goes
+// blind on a wall it meets at a shallow angle - the beam reflects away, so the
+// robot reads "clear" while pressed against it. What gives it away is that the
+// world stops changing: if all three ranges sit inside a narrow band for this
+// long while cruising, the robot is not going anywhere. Only trusted when
+// something is near; down an open corridor every range is saturated and still.
+constexpr uint32_t kNoChangeWindowMs = 2000;
+constexpr uint16_t kNoChangeSpreadMm = 25;
+constexpr uint16_t kNoChangeNearMm   = 400;
+
 constexpr uint32_t kBackupMs = 600;         // after a bump
 constexpr uint32_t kTurnMinMs = 350;        // so a turn always commits
 constexpr uint32_t kTurnMaxMs = 1600;       // give up and back off instead

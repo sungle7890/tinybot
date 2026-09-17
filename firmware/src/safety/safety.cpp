@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include "config.h"
 #include "hal/hal.h"
 #include "pins.h"
 
@@ -23,6 +24,7 @@ void latch(uint8_t bit, uint32_t now) {
 }  // namespace
 
 void begin() {
+  if (!cfg::kBumpersFitted) return;
   pinMode(pins::kBumperLeft, INPUT_PULLUP);
   pinMode(pins::kBumperRight, INPUT_PULLUP);
 }
@@ -33,6 +35,7 @@ void begin() {
 // against an obstacle holds the switch closed for far longer than one 20 ms
 // tick, so no contact is missed. The latch below still makes the trip sticky.
 void poll() {
+  if (!cfg::kBumpersFitted) return;
   const uint32_t now = millis();
   if (now - g_lastEdgeMs < kDebounceMs) return;
 

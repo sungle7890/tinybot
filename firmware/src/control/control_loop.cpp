@@ -161,6 +161,39 @@ bool moreRoomOnLeft() {
   return tof::rangeMm(tof::kLeft) >= tof::rangeMm(tof::kRight);
 }
 
+// A ToF sensor meeting a wall at a shallow angle reflects the beam away and
+// reports "clear" while the robot is pressed against it. With no bumper fitted
+// (cfg::kBumpersFitted) nothing else notices the contact - except that the
+// world stops changing. Watch all three ranges over a window and call it a
+// collision when none of them moves while something is near.
+uint32_t g_windowStartMs = 0;
+uint16_t g_windowMin[tof::kCount];
+uint16_t g_windowMax[tof::kCount];
+
+void resetRangeWindow(uint32_t now) {
+  g_windowStartMs = now;
+  for (uint8_t i = 0; i < tof::kCount; ++i) {
+    g_windowMin[i] = UINT16_MAX;
+    g_windowMax[i] = 0;
+  }
+}
+
+bool worldStoppedChanging(uint32_t now) {
+  for (uint8_t i = 0; i < tof::kCount; ++i) {
+    const uint16_t mm = tof::rangeMm(static_cast<tof::Index>(i));
+    if (mm < g_windowMin[i]) g_windowMin[i] = mm;
+    if (mm > g_windowMax[i]) g_windowMax[i] = mm;
+  }
+  if (now - g_windowStartMs < cfg::kNoChangeWindowMs) return false;
+
+  bool still = tof::rangeMm(tof::kFront) < cfg::kNoChangeNearMm;
+  for (uint8_t i = 0; still && i < tof::kCount; ++i) {
+    if (g_windowMax[i] - g_windowMin[i] > cfg::kNoChangeSpreadMm) still = false;
+  }
+  resetRangeWindow(now);
+  return still;
+}
+
 // Ends roaming from inside the control loop. Mirrors finishDrive: brake first,
 // then take the lock only for the mode write.
 void finishAuto(const char* reason) {
@@ -208,6 +241,9 @@ void stepAuto(uint8_t bumped) {
 
   switch (g_roam) {
     case Roam::kBackup:
+      // Only cruising fills the window; keep it anchored to now so a resumed
+      // cruise starts measuring from scratch instead of from a stale mark.
+      resetRangeWindow(now);
       motors::set(-cfg::kAutoBackDuty, -cfg::kAutoBackDuty);
       if (static_cast<int32_t>(now - g_roamUntilMs) >= 0) {
         beginTurn(g_turnLeft, cfg::kTurnMinMs * 2);
@@ -215,6 +251,7 @@ void stepAuto(uint8_t bumped) {
       return;
 
     case Roam::kTurn: {
+      resetRangeWindow(now);
       const int16_t duty = cfg::kAutoTurnDuty;
       motors::set(g_turnLeft ? -duty : duty, g_turnLeft ? duty : -duty);
       const bool committed = static_cast<int32_t>(now - g_roamUntilMs) >= 0;
@@ -238,7 +275,16 @@ void stepAuto(uint8_t bumped) {
       }
       const uint16_t front = tof::rangeMm(tof::kFront);
       if (front < cfg::kFrontBlockedMm) {
+        resetRangeWindow(now);
         beginTurn(moreRoomOnLeft(), cfg::kTurnMinMs);
+        return;
+      }
+      // Cruising, front says clear, and nothing is moving: it is against
+      // something the beam cannot see. Back off and turn, as if bumped.
+      if (worldStoppedChanging(now)) {
+        g_roam = Roam::kBackup;
+        g_turnLeft = moreRoomOnLeft();
+        g_roamUntilMs = now + cfg::kBackupMs;
         return;
       }
       // Ease away from a wall that is close on one side.
@@ -249,10 +295,23 @@ void stepAuto(uint8_t bumped) {
                  tof::rangeMm(tof::kRight) < cfg::kSideNearMm) {
         bias = -cfg::kSteerBias;
       }
+      // Steering must not park the inner wheel below the deadband; see
+      // kMinMovingDuty. Give back to the inner wheel what it cannot use, so
+      // the robot keeps rolling forward while it leans away from the wall.
+      int16_t inner = cfg::kAutoCruiseDuty - abs(bias);
+      if (inner < cfg::kMinMovingDuty) inner = cfg::kMinMovingDuty;
+      const int16_t outer = cfg::kAutoCruiseDuty + abs(bias);
+
       // Progress is a sustained run, not a single tick: see kCruiseRunTicks.
       g_cruiseRunTicks = runBefore + 1;
       if (g_cruiseRunTicks >= cfg::kCruiseRunTicks) g_lastCruiseMs = now;
-      motors::set(cfg::kAutoCruiseDuty + bias, cfg::kAutoCruiseDuty - bias);
+      if (bias > 0) {
+        motors::set(outer, inner);  // wall on the left: lean right
+      } else if (bias < 0) {
+        motors::set(inner, outer);
+      } else {
+        motors::set(cfg::kAutoCruiseDuty, cfg::kAutoCruiseDuty);
+      }
       return;
     }
   }
@@ -371,7 +430,9 @@ bool requestAuto() {
   g_roamUntilMs = now;
   g_autoStartedMs = now;
   g_lastCruiseMs = now;
+  g_cruiseRunTicks = 0;
   g_autoStopReason = nullptr;
+  resetRangeWindow(now);
   g_mode = Mode::kAuto;
   return true;
 }
