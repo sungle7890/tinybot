@@ -36,16 +36,29 @@ MCU(아두이노급)에서 신경망을 **학습**시키는 것은 현실적이�
 
 ```
 firmware/   MCU 펌웨어 (실시간 제어 루프, 온디바이스 학습)
-host/       호스트 측 Python (텔레메트리, 시뮬레이션, 정책 학습)
+host/       호스트 도구 (실시간 대시보드; 이후 시뮬레이션·정책 학습)
 hardware/   배선도, 섀시, 부품 실측 메모
 docs/       설계 문서
 ```
 
 ## 상태
 
-**Phase 1 — 펌웨어 작성 완료, 실기 검증 대기.**
+**Phase 3 — 온디바이스 Q-learning 진행 중.** 실제 로봇(Arduino UNO R4 WiFi)에서 돌아간다.
 
-- Phase 0 종료. 보드는 ESP32-S3 단독(A안)으로 확정 — [docs/05-open-questions.md](docs/05-open-questions.md)
-- `firmware/`는 컴파일까지 확인됨 (`pio run` 성공, `-Wall -Wextra` 경고 없음)
-- **아직 부품이 없어 실기 검증은 0.** 브링업 절차는 [firmware/README.md](firmware/README.md)
-- `host/`는 Phase 2에서 시작
+- **Phase 1 완료** — 50 Hz 제어 루프, 센서 3종, 엔코더 보정(1 m 오차 +1.6 %)을 실기로 검증.
+  측정값은 전부 [hardware/bringup-log.md](hardware/bringup-log.md)에 있다
+- **Phase 2 부분 완료** — 규칙 기반 자율 주행(`a`). 완료 조건(10분·충돌 3회 이하)은
+  범퍼가 없어 측정할 수 없어 미달성으로 기록
+- **Phase 3 진행 중** — 로봇이 바닥에서 직접 학습(`l`)하고, 학습 결과는 전원을 껐다 켜도 남는다.
+  규칙 기반보다 나은지는 **아직 비교 전**
+- 알려진 한계: 거리센서가 바닥을 보도록 달려 있어 감지 거리가 13.5 cm뿐이다
+  ([원인과 측정](hardware/bringup-log.md))
+- `host/dashboard/` — USB 또는 Wi-Fi로 붙는 실시간 대시보드 (학습 곡선 포함)
+- 학습 로직 단위 테스트: `cd firmware && pio test -e native`
+
+보드는 원래 ESP32-S3로 계획했지만([05 미결정 사항](docs/05-open-questions.md)), 이미 있던
+UNO R4 WiFi로 진행했다. 펌웨어는 두 보드 모두 빌드된다.
+
+## 라이선스
+
+[MIT](LICENSE)
