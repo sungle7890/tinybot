@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <WiFiS3.h>
+#include <string.h>
 
 #include "comms/console.h"
 #include "comms/fmt.h"
@@ -21,7 +22,13 @@
 #endif
 #ifndef TINYBOT_AP_SSID
 #define TINYBOT_AP_SSID "tinybot"
-#define TINYBOT_AP_PASS "tinybot1234"
+#endif
+// No default password, on purpose. The command API has no authentication, so
+// whoever joins the robot's own network can drive it - and a default published
+// with the source is a password everyone already has. Without one set in
+// secrets.h the robot simply does not open a network of its own.
+#ifndef TINYBOT_AP_PASS
+#define TINYBOT_AP_PASS ""
 #endif
 
 namespace wifi_link {
@@ -209,7 +216,10 @@ bool begin() {
     storeIp(WiFi.localIP());
   } else {
     // No network configured, or joining failed: make our own so the robot is
-    // still reachable without a cable.
+    // still reachable without a cable - but only with a password the owner
+    // chose. WPA2 needs at least 8 characters; anything shorter would either
+    // fail here or, worse, fall back to an open network.
+    if (strlen(TINYBOT_AP_PASS) < 8) return false;
     if (WiFi.beginAP(TINYBOT_AP_SSID, TINYBOT_AP_PASS) != WL_AP_LISTENING) {
       return false;
     }
