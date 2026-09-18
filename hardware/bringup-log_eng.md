@@ -297,3 +297,38 @@ Phase 1); with 200 ms learning steps the impact should be small, but that is not
    nearly still, empty space could read as "contact". Standing still, the sides wandered 30-40 mm,
    above the 25 mm threshold, but not by much
 4. Rule-based vs learning, same conditions
+
+### First rule-vs-learning comparison (2026-09-18, same start, 3 minutes each)
+
+| | rule-based (`a`) | learning (`l`) |
+|---|---|---|
+| forward | **19.06 m** (6.35 m/min) | 15.80 m (5.18 m/min) |
+| contacts | 1 | **0** |
+| stuck (10 s no progress) | **0** | 7 |
+
+Rule-based wins. Learning spent at least 70 s going nowhere, for two reasons.
+
+1. **Getting stuck cost almost nothing.** Ten seconds of dithering in a corner cost about −5 in
+   turn costs, cheaper than one contact (−10). → a −5 stuck penalty.
+2. **Ping-pong in place.** In the recording, 10–12 s, the robot stays put while turning left and
+   right in turn. The table showed the same loop (open floor, after forward → right → left →
+   forward → …): the previous action is part of the state, and undoing it cost nothing.
+   → a −0.5 reversal penalty.
+
+The second learning run was void: Wi-Fi dropped around 90 s, and the firmware **only joined at
+boot and never rejoined**, so the board sat with its lights on, unreachable until a power cycle,
+with no way to send stop. → the link is checked every second, a drop ends the session, and the
+robot rejoins every 15 s while idle.
+
+### Firmware over the air (OTA) — ✅
+
+The R4 core's `OTAUpdate` has the Wi-Fi module fetch an `.ota` image and write it into the main
+MCU. `host/ota/make_ota.py` builds the image; its LZSS output matches Arduino's encoder byte for byte.
+
+- First attempt: the robot fetched the file, then went silent on Wi-Fi and USB alike until a power
+  cycle. And **I had sent a file that was not rebuilt** (PlatformIO decides by file content, not
+  date), so the attempt could not show whether anything was applied
+- Second attempt: a fresh build (15:33:03), and the robot rebooted into it on its own in **16 s**
+- Calibration (3222.4), Q-table (3,078 steps) and run log (2 runs) **all survived**
+
+Firmware now goes on without the cable. The first attempt's hang is unexplained; log it if it recurs.
