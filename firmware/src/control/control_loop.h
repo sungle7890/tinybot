@@ -15,6 +15,7 @@ enum class Mode : uint8_t {
   kSafetyStop = 3,     // bumper latched; needs an explicit clear
   kAuto = 4,           // roaming on hand-written rules (Phase 2 baseline)
   kLearn = 5,          // roaming on the Q-table, learning as it goes (Phase 3)
+  kPolicy = 6,         // roaming on the Q-table as learned: no exploring, no updates
 };
 
 struct LoopStats {
@@ -50,6 +51,12 @@ RoamStatus roamStatus();
 // Start roaming on the Q-table. Stops on `s` or the session cap; getting stuck
 // triggers a scripted escape instead of a stop.
 bool requestLearn();
+
+// Drive on what the table has learned, and nothing else: always the best
+// action, no random steps, the table left untouched. This is the fair test
+// against rule-based roaming - a learning run keeps taking random steps on
+// purpose, and those show up as twitching and lost distance.
+bool requestPolicy();
 
 // One measuring stick for roaming and learning, or the Phase 3 exit criterion
 // ("beats the rule-based baseline") has nothing to compare. Counts from the

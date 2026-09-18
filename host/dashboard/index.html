@@ -916,6 +916,9 @@
             <button class="btn" type="button" data-cmd="l">
               l<span data-i18n="qL">학습 주행</span>
             </button>
+            <button class="btn" type="button" data-cmd="lr">
+              lr<span data-i18n="qLr">배운 대로</span>
+            </button>
             <button class="btn" type="button" data-cmd="q">
               q<span data-i18n="qQ">Q 테이블</span>
             </button>
@@ -1034,7 +1037,7 @@
             overWin: "초과",
             minmax: "최소/최대",
             mean: "평균",
-            modes: ["대기", "수동", "직진", "안전 정지", "규칙 주행", "학습 주행"],
+            modes: ["대기", "수동", "직진", "안전 정지", "규칙 주행", "학습 주행", "배운 대로 주행"],
             wifiConnect: "Wi-Fi 연결",
             wifiDisconnect: "Wi-Fi 끊기",
             stWifi: "Wi-Fi 연결됨",
@@ -1070,6 +1073,7 @@
             qA: "규칙 주행",
             qL: "학습 주행",
             qQ: "Q 테이블",
+            qLr: "배운 대로",
             qH: "주행 이력",
             safetyOk: "안전 OK",
             bumperL: "좌 범퍼",
@@ -1141,7 +1145,7 @@
             overWin: "over",
             minmax: "min/max",
             mean: "mean",
-            modes: ["idle", "manual", "drive", "SAFETY STOP", "rule roaming", "learning"],
+            modes: ["idle", "manual", "drive", "SAFETY STOP", "rule roaming", "learning", "learned policy"],
             wifiConnect: "Connect Wi-Fi",
             wifiDisconnect: "Disconnect Wi-Fi",
             stWifi: "Wi-Fi connected",
@@ -1177,6 +1181,7 @@
             qA: "rule roam",
             qL: "learn",
             qQ: "Q-table",
+            qLr: "learned only",
             qH: "run log",
             safetyOk: "safety OK",
             bumperL: "left bumper",
@@ -1668,7 +1673,8 @@
             $("sessEnded").hidden = true;
             return;
           }
-          const modeIdx = S.mode === "learn" ? 5 : S.mode === "auto" ? 4 : -1;
+          const modeIdx =
+            { auto: 4, learn: 5, policy: 6 }[S.mode] ?? -1;
           $("vSess").textContent = t("modes")[modeIdx] ?? S.mode;
           $("sSess").textContent =
             `${S.running ? t("running") : t("ended")} · ${S.elapsed.toFixed(0)} s`;

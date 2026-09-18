@@ -476,7 +476,10 @@ float rewardFor(learn::Action previous, learn::Action action, float meters,
 
 // One tick of learning. A decision is taken, held for kLearnStepMs, scored
 // from the encoders and ranges, and fed back before the next one is taken.
-void stepLearn() {
+// With `learning` false the same loop only follows the table: best action,
+// no updates, no checkpoints - the scoring still runs so the run is measured
+// on exactly the same terms.
+void stepLearn(bool learning) {
   const uint32_t now = millis();
 
   if (now - g_sessStartedMs > cfg::kLearnMaxRunMs) {
@@ -510,7 +513,7 @@ void stepLearn() {
 
   if (!g_stepActive) {
     g_stepState = learn::encodeState(front, left, right, g_prevAction);
-    g_stepAction = learn::choose(g_stepState);
+    g_stepAction = learning ? learn::choose(g_stepState) : learn::best(g_stepState);
     g_stepStartedMs = now;
     g_stepStartLeft = encoders::leftCount();
     g_stepStartRight = encoders::rightCount();
@@ -532,7 +535,7 @@ void stepLearn() {
   const float reward =
       rewardFor(g_prevAction, g_stepAction, meters, front, g_stepContact, stuck);
   const uint8_t next = learn::encodeState(front, left, right, g_stepAction);
-  learn::update(g_stepState, g_stepAction, reward, next);
+  if (learning) learn::update(g_stepState, g_stepAction, reward, next);
 
   ++g_sessSteps;
   g_sessRewardSum += reward;
@@ -552,7 +555,7 @@ void stepLearn() {
     return;
   }
 
-  if (now - g_lastCheckpointMs > cfg::kLearnCheckpointMs) {
+  if (learning && now - g_lastCheckpointMs > cfg::kLearnCheckpointMs) {
     g_lastCheckpointMs = now;
     learn::requestSave();
   }
@@ -591,7 +594,9 @@ void step() {
         g_mode = Mode::kSafetyStop;
       }
     } else if (bumped && g_mode != Mode::kSafetyStop) {
-      if (g_mode == Mode::kAuto || g_mode == Mode::kLearn) stoppedSession = g_mode;
+      if (g_mode == Mode::kAuto || g_mode == Mode::kLearn || g_mode == Mode::kPolicy) {
+        stoppedSession = g_mode;
+      }
       g_mode = Mode::kSafetyStop;
     }
     modeNow = g_mode;
@@ -626,12 +631,13 @@ void step() {
       stepAuto(bumpReason);
       break;
     case Mode::kLearn:
+    case Mode::kPolicy:
       trackSession();
       if (wifi_link::linkLost()) {
         finishLearn("wi-fi link lost", history::kStopLinkLost);
         break;
       }
-      stepLearn();
+      stepLearn(modeNow == Mode::kLearn);
       break;
     case Mode::kSafetyStop:
       motors::brake();
@@ -675,7 +681,9 @@ void requestIdle() {
   const bool bumped = safety::tripped();
   const Mode was = mode();
   if (was == Mode::kLearn) learn::requestSave();
-  if (was == Mode::kAuto || was == Mode::kLearn) endSession(millis(), history::kStopCommand);
+  if (was == Mode::kAuto || was == Mode::kLearn || was == Mode::kPolicy) {
+    endSession(millis(), history::kStopCommand);
+  }
   hal::CriticalSection lock;
   g_mode = bumped ? Mode::kSafetyStop : Mode::kIdle;
   g_reqLeft = 0;
@@ -707,11 +715,12 @@ bool requestAuto() {
   return true;
 }
 
-bool requestLearn() {
+namespace {
+bool startTableRun(Mode mode) {
   if (safety::tripped()) return false;
   const uint32_t now = millis();
   // Outside the lock: it reads the encoders, which take a lock of their own.
-  beginSession(Mode::kLearn, now);
+  beginSession(mode, now);
   hal::CriticalSection lock;
   g_stepActive = false;
   g_prevAction = learn::kForward;
@@ -721,9 +730,13 @@ bool requestLearn() {
   g_escapeTurnUntilMs = 0;
   g_autoStopReason = nullptr;
   resetRangeWindow(now);
-  g_mode = Mode::kLearn;
+  g_mode = mode;
   return true;
 }
+}  // namespace
+
+bool requestLearn() { return startTableRun(Mode::kLearn); }
+bool requestPolicy() { return startTableRun(Mode::kPolicy); }
 
 SessionStats sessionStats() {
   const uint32_t now = millis();
@@ -782,6 +795,7 @@ const char* modeName(Mode m) {
     case Mode::kDriveDistance: return "drive";
     case Mode::kAuto: return "auto";
     case Mode::kLearn: return "learn";
+    case Mode::kPolicy: return "policy";
     case Mode::kSafetyStop: return "SAFETY-STOP";
   }
   return "?";

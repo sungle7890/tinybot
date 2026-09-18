@@ -197,6 +197,14 @@ void test_exploration_ignores_the_table() {
   TEST_ASSERT_EQUAL_UINT8(learn::kForward, learn::choose(5));
 }
 
+void test_best_never_explores() {
+  // A policy run is judged against the rules; random steps would handicap it.
+  learn::update(5, learn::kTurnRight, 3.0f, 0);
+  g_randoms = {0, 0, 0, 0};  // would force exploration in choose()
+  TEST_ASSERT_EQUAL_UINT8(learn::kTurnRight, learn::best(5));
+  TEST_ASSERT_EQUAL_UINT32(1, learn::steps());  // and it learns nothing
+}
+
 // --- Updating ---------------------------------------------------------------
 
 void test_update_follows_the_q_learning_rule() {
@@ -419,6 +427,7 @@ int main() {
   RUN_TEST(test_greedy_choice_takes_the_best_action);
   RUN_TEST(test_ties_break_at_random_not_always_forward);
   RUN_TEST(test_exploration_ignores_the_table);
+  RUN_TEST(test_best_never_explores);
   RUN_TEST(test_update_follows_the_q_learning_rule);
   RUN_TEST(test_updates_smaller_than_a_hundredth_are_lost);
   RUN_TEST(test_values_clamp_instead_of_wrapping);

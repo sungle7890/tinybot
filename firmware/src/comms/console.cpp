@@ -51,6 +51,7 @@ void printHelp() {
       "  f <duty>       both wheels at <duty>\n"
       "  a              roam on the rule-based behaviour (self-stops)\n"
       "  l              roam and learn on the Q-table (10 min cap)\n"
+      "  lr             roam on what was learned: no random steps, no updates\n"
       "  q              Q-table, epsilon, checkpoint info\n"
       "  qs             save the Q-table now\n"
       "  qz             forget everything learned\n"
@@ -96,7 +97,7 @@ void cmdStatus() {
                 ss.elapsedMs / 1000.0f, ss.forwardMeters,
                 static_cast<unsigned>(ss.contacts),
                 static_cast<unsigned>(ss.escapes));
-    if (ss.mode == control::Mode::kLearn) {
+    if (ss.mode == control::Mode::kLearn || ss.mode == control::Mode::kPolicy) {
       fmt::printf("learning      : %lu steps, mean reward %+.2f, recent %+.2f, "
                   "epsilon %.3f\n",
                   static_cast<unsigned long>(ss.learnSteps), ss.meanReward,
@@ -337,6 +338,10 @@ void dispatch(char* line) {
     } else {
       fmt::println("refused: safety is latched");
     }
+  } else if (!strcmp(cmd, "lr")) {
+    fmt::println(control::requestPolicy()
+                     ? "policy run - best action only, table unchanged; stops on `s`"
+                     : "refused: safety is latched");
   } else if (!strcmp(cmd, "q")) {
     cmdQTable();
   } else if (!strcmp(cmd, "h")) {

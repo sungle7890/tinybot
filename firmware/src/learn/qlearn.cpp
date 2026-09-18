@@ -99,11 +99,9 @@ uint8_t encodeState(uint16_t frontMm, uint16_t leftMm, uint16_t rightMm,
   return static_cast<uint8_t>((band(frontMm) * 3 + side) * kActionCount + previous);
 }
 
-Action choose(uint8_t state) {
-  hal::CriticalSection lock;
-  if (random(10000) < static_cast<long>(g_table.epsilon * 10000.0f)) {
-    return static_cast<Action>(random(kActionCount));
-  }
+namespace {
+// Caller holds the lock.
+Action greedy(uint8_t state) {
   int16_t best = cell(state, 0);
   for (uint8_t a = 1; a < kActionCount; ++a) {
     if (cell(state, a) > best) best = cell(state, a);
@@ -114,6 +112,20 @@ Action choose(uint8_t state) {
     if (cell(state, a) == best) ties[tieCount++] = a;
   }
   return static_cast<Action>(ties[random(tieCount)]);
+}
+}  // namespace
+
+Action choose(uint8_t state) {
+  hal::CriticalSection lock;
+  if (random(10000) < static_cast<long>(g_table.epsilon * 10000.0f)) {
+    return static_cast<Action>(random(kActionCount));
+  }
+  return greedy(state);
+}
+
+Action best(uint8_t state) {
+  hal::CriticalSection lock;
+  return greedy(state);
 }
 
 void update(uint8_t state, Action action, float reward, uint8_t nextState) {

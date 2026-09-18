@@ -23,6 +23,10 @@ uint8_t encodeState(uint16_t frontMm, uint16_t leftMm, uint16_t rightMm,
 // Epsilon-greedy. Ties break at random, or a blank table always picks forward.
 Action choose(uint8_t state);
 
+// The table's best action, no exploration. For judging what was learned: a
+// run that still takes random steps is not a fair test against the rules.
+Action best(uint8_t state);
+
 // One Q-learning update, then epsilon decays.
 void update(uint8_t state, Action action, float reward, uint8_t nextState);
 
