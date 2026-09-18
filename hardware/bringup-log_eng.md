@@ -332,3 +332,33 @@ MCU. `host/ota/make_ota.py` builds the image; its LZSS output matches Arduino's 
 - Calibration (3222.4), Q-table (3,078 steps) and run log (2 runs) **all survived**
 
 Firmware now goes on without the cable. The first attempt's hang is unexplained; log it if it recurs.
+
+### Twitching: not fixed by penalties, much reduced by resetting the table (2026-09-18)
+
+With the reversal penalty in place the robot still twitched for all three minutes (#3: 14.49 m,
+1 stuck). The table had lost the left-right loop but grown a **forward → left → forward → …** one,
+which is not a reversal and so pays no penalty.
+
+Old values were the cause. "Forward after forward" had been scored low early on (2.96), and with
+left ranked higher it was almost never tried again: at 5 % exploration, forward from that state
+comes up about 1 % of the time.
+
+Changing the state (dropping the previous action) was on the table, but one change at a time:
+**only the table was reset** (the old one is in `hardware/qtables/2026-09-18-before-reset.txt`).
+Exploration went back to 0.30, and after five minutes of learning (#4):
+
+| open floor, previous action | best before reset | best after reset |
+|---|---|---|
+| forward | left (the loop) | **forward (4.24)** |
+| left | forward | forward |
+| right | left | forward |
+| back | right | forward |
+
+**The twitching is much reduced but not gone** (seen on the robot). Likely remaining causes:
+exploration is at 0.08, so about one step in twelve (every 2.4 s) is random on purpose; actions
+are re-chosen every 200 ms; and rows like the "front far" loop below remain. #4: 22.44 m in 5 minutes (4.43 m/min), 2 contacts,
+4 stuck. It started at 0.30 exploration, so the early part was random on purpose. Distance per
+minute is still below rule-based (6.35).
+
+One loop remains: "front far, open, after forward" prefers left (3.00) over forward (0.89). With the
+sensors seeing the floor that state is rare, so its effect is small.
