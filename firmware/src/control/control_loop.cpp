@@ -447,7 +447,8 @@ void driveAction(learn::Action action) {
   }
 }
 
-float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool contact) {
+float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool contact,
+                bool stuck) {
   // Encoders count wheel turns, not travel: pinned against a wall, a slipping
   // wheel still reports progress. On a step that ended in contact the ranges
   // have already said the robot went nowhere, so forward distance earns
@@ -457,6 +458,7 @@ float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool conta
   if (action == learn::kTurnLeft || action == learn::kTurnRight) reward -= cfg::kTurnCost;
   if (frontMm < cfg::kFrontBlockedMm) reward -= cfg::kNearCost;
   if (contact) reward -= cfg::kContactCost;
+  if (stuck) reward -= cfg::kStuckCost;
   return reward;
 }
 
@@ -512,7 +514,10 @@ void stepLearn() {
   const int32_t dCounts = ((encoders::leftCount() - g_stepStartLeft) +
                            (encoders::rightCount() - g_stepStartRight)) / 2;
   const float meters = static_cast<float>(dCounts) / encoders::countsPerMeter();
-  const float reward = rewardFor(g_stepAction, meters, front, g_stepContact);
+  if (meters > cfg::kLearnProgressM) g_learnProgressMs = now;
+  // Decided before scoring, so the step that ran the clock out pays for it.
+  const bool stuck = now - g_learnProgressMs > cfg::kAutoStuckMs;
+  const float reward = rewardFor(g_stepAction, meters, front, g_stepContact, stuck);
   const uint8_t next = learn::encodeState(front, left, right, g_stepAction);
   learn::update(g_stepState, g_stepAction, reward, next);
 
@@ -522,12 +527,11 @@ void stepLearn() {
   g_rewardAt = (g_rewardAt + 1) % cfg::kRewardWindow;
   if (g_rewardFilled < cfg::kRewardWindow) ++g_rewardFilled;
   if (g_stepContact) ++g_sessContacts;
-  if (meters > cfg::kLearnProgressM) g_learnProgressMs = now;
   g_prevAction = g_stepAction;
   g_stepActive = false;
 
   // Same rule as roaming: this long without progress means it is wedged.
-  if (now - g_learnProgressMs > cfg::kAutoStuckMs) {
+  if (stuck) {
     ++g_sessEscapes;
     g_escapeLeft = tof::rangeMm(tof::kLeft) >= tof::rangeMm(tof::kRight);
     g_escapeBackUntilMs = now + cfg::kLearnEscapeBackMs;

@@ -170,6 +170,12 @@ constexpr float kRewardPerMeter = 30.0f;
 constexpr float kTurnCost       = 0.1f;
 constexpr float kNearCost       = 1.0f;
 constexpr float kContactCost    = 10.0f;
+// Paid by the step that runs the stuck clock out (cfg::kAutoStuckMs without
+// progress). Without it, dithering in a corner cost only the turn cost per
+// step - about -5 over ten seconds - which is cheaper than one contact. The
+// first rule-vs-learning comparison showed exactly that trade: 0 contacts but
+// 7 escapes, and 22 % less distance than the rule-based run.
+constexpr float kStuckCost      = 5.0f;
 
 // Learning runs are long; the session cap is ten minutes instead of three.
 // Getting stuck does not end a learning session: a scripted backup-and-turn
