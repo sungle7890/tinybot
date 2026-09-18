@@ -362,3 +362,26 @@ minute is still below rule-based (6.35).
 
 One loop remains: "front far, open, after forward" prefers left (3.00) over forward (0.89). With the
 sensors seeing the floor that state is rare, so its effect is small.
+
+### Policy run (`lr`): the twitching was exploration (2026-09-18)
+
+`lr` runs the same loop as `l` but always takes the table's best action and never updates the
+table. It exists for a fair comparison with the rules — a test without practice questions.
+
+**Almost no twitching** (seen on the robot). The table had learned properly; what twitching was
+left under `l` came from exploration (ε 0.08, a random step about every 2.4 s).
+
+Stopped at 69 s at the owner's request:
+
+| | rule-based #1 | learning #4 (`l`) | policy (`lr`) |
+|---|---|---|---|
+| duration | 3 min | 5 min | 69 s (stopped) |
+| forward per min | 6.35 m | 4.43 m | **6.14 m** |
+| contacts | 1 | 2 | 1 |
+| stuck | 0 | 4 | 2 |
+
+For the first time the learned behaviour runs about as fast as the rules. One 69-second run is not
+proof, though. Two stuck events in 69 s is a lot, and the recent reward was −0.29 when it stopped:
+walls and corners are still weak, which fits sensors that see only 13.5 cm ahead.
+
+**Next:** with a full battery, `lr` 3 minutes then `a` 3 minutes, back to back, same conditions.
