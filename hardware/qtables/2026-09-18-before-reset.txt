@@ -1,0 +1,47 @@
+# Q-table before reset, 2026-09-18
+# 36 states (front band x side x previous action), rewards incl. stuck -5 and reversal -0.5 for the last 810 steps only
+
+table   : loaded from checkpoint, 3888 steps total, epsilon 0.050
+saves   : 7 this boot, last 3 bytes in 366 ms, longest 1805 ms
+state             prev  |   fwd   left  right   back  best
+near open    fwd   |   0.00   0.00   0.29  -0.33  right
+near open    left  |   0.00   1.17  -0.22   0.00  left
+near open    right |   2.15  -0.12   0.00  -0.01  fwd
+near open    back  |   0.82   0.00   0.98   0.00  right
+near wall-L  fwd   |  -0.27  -0.16  -0.22  -0.16  left
+near wall-L  left  |   0.57  -0.26  -0.21  -0.30  fwd
+near wall-L  right |  -0.04  -0.02   0.00   0.01  back
+near wall-L  back  |   2.63   0.00  -0.22  -0.47  fwd
+near wall-R  fwd   |  -0.14  -0.22   0.22  -0.13  right
+near wall-R  left  |  -0.20  -0.40   0.05  -0.12  right
+near wall-R  right |   0.42  -0.22  -0.22  -0.20  fwd
+near wall-R  back  |  -0.36   0.00  -0.45  -0.36  left
+mid  open    fwd   |   2.96   4.28   2.52  -0.21  left
+mid  open    left  |   4.55   2.37   1.73   0.39  fwd
+mid  open    right |   0.51   3.58   0.00  -0.16  left
+mid  open    back  |   0.00   0.00   1.81   0.00  right
+mid  wall-L  fwd   |   0.37   0.90   0.08  -0.19  left
+mid  wall-L  left  |   2.18  -0.06  -0.04  -0.06  fwd
+mid  wall-L  right |   1.13  -0.15  -0.16  -0.11  fwd
+mid  wall-L  back  |   0.00  -0.26  -0.09  -0.23  fwd
+mid  wall-R  fwd   |   4.04   1.99   1.85   0.65  fwd
+mid  wall-R  left  |   3.76   0.45   0.00  -0.20  fwd
+mid  wall-R  right |   2.68  -0.02   0.68  -0.35  fwd
+mid  wall-R  back  |   0.35   2.46   0.00   0.00  left
+far  open    fwd   |   3.81   4.82   3.15   3.54  left
+far  open    left  |   5.47   1.26   1.10   0.93  fwd
+far  open    right |   3.66   0.00   0.83   0.99  fwd
+far  open    back  |   6.00   0.71   0.71   0.35  fwd
+far  wall-L  fwd   |   0.00   1.49   0.00  -0.20  left
+far  wall-L  left  |   0.00   0.60  -0.12  -0.11  left
+far  wall-L  right |   0.35  -0.12   0.00   0.00  fwd
+far  wall-R  fwd   |   0.73   2.68  -0.04   0.05  left
+far  wall-R  left  |   3.19  -0.02  -0.24   0.00  fwd
+far  wall-R  right |   1.89  -0.04  -0.02  -0.12  fwd
+far  wall-R  back  |   0.52  -0.04  -0.04  -0.20  fwd
+
+sessions logged: 3 (next id 4)
+  id  mode   time   forward   m/min  contacts  escapes  steps  reward  ended
+   1  auto   180s   19.06 m    6.35         1        0      0  +0.00  time cap
+   2  learn  183s   15.80 m    5.18         0        7    788  +0.53  stopped
+   3  learn  182s   14.49 m    4.78         1        1    810  +0.32  stopped
