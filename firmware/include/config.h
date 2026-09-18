@@ -176,6 +176,13 @@ constexpr float kContactCost    = 10.0f;
 // first rule-vs-learning comparison showed exactly that trade: 0 contacts but
 // 7 escapes, and 22 % less distance than the rule-based run.
 constexpr float kStuckCost      = 5.0f;
+// Paid for undoing the previous step: left after right, right after left, back
+// after forward and forward after back. Nothing charged for it before, and the
+// table found a loop - in open space it learned right after forward, left after
+// right, forward after left - so the robot twitched in place every 200 ms,
+// on video and in `q` alike. A reversal stops the motors and spins them the
+// other way for nothing; now it costs what it wastes.
+constexpr float kReverseCost    = 0.5f;
 
 // Learning runs are long; the session cap is ten minutes instead of three.
 // Getting stuck does not end a learning session: a scripted backup-and-turn

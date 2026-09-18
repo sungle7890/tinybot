@@ -3,6 +3,7 @@
 #if defined(TINYBOT_PLATFORM_R4)
 
 #include <Arduino.h>
+#include <OTAUpdate.h>
 #include <WiFiS3.h>
 #include <string.h>
 
@@ -10,6 +11,7 @@
 #include "comms/fmt.h"
 #include "comms/telemetry.h"
 #include "config.h"
+#include "control/control_loop.h"
 #include "hal/hal.h"
 
 #if __has_include("secrets.h")
@@ -67,6 +69,30 @@ uint32_t g_lastTelemetryFetchMs = 0;
 // so it switches the stream on; the stream goes back off once fetching stops,
 // but only if it was a fetch that turned it on - never a `v` typed over USB.
 bool g_telemetryOnForWifi = false;
+
+// The join used to happen once, at boot. When the link dropped - the robot
+// roaming out of range, or the battery sagging under the motors - the board
+// stayed up with its lights on and never came back until a power cycle, and
+// in the meantime nothing could reach it to say stop. Now the link is
+// watched: a drop is reported to the control loop, which ends any session,
+// and the robot rejoins once it is standing still.
+constexpr uint32_t kLinkCheckMs = 1000;
+constexpr uint32_t kRejoinIntervalMs = 15000;
+bool g_linkLost = false;
+uint32_t g_lastLinkCheckMs = 0;
+uint32_t g_lastRejoinMs = 0;
+uint32_t g_drops = 0;
+uint32_t g_rejoins = 0;
+
+// Firmware update over the air. The Wi-Fi module downloads the image and
+// writes it into the main MCU, so the whole thing blocks for as long as the
+// transfer takes - which is why it only runs with the robot idle, and only
+// after the reply to the `ota` request has gone out.
+char g_otaUrl[96] = "";
+bool g_otaPending = false;
+uint32_t g_otaRequestedMs = 0;
+const char* g_otaStatus = "none this boot";
+int g_otaCode = 0;
 uint32_t g_clientStartedMs = 0;
 uint32_t g_lastAcceptMs = 0;
 bool g_up = false;
@@ -197,6 +223,63 @@ void closeClient() {
   ++g_closed;
 }
 
+bool idleForBlockingWork() {
+  const control::Mode m = control::mode();
+  return m == control::Mode::kIdle || m == control::Mode::kSafetyStop;
+}
+
+// Rejoining blocks while the module negotiates, and a blocked loop leaves the
+// motors on their last duty - so it only happens while nothing is driving.
+void checkLink() {
+  if (g_ap) return;
+  const uint32_t now = millis();
+  if (now - g_lastLinkCheckMs < kLinkCheckMs) return;
+  g_lastLinkCheckMs = now;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    g_linkLost = false;
+    return;
+  }
+  if (!g_linkLost) {
+    g_linkLost = true;
+    ++g_drops;
+    if (g_hasClient) closeClient();
+  }
+  if (!idleForBlockingWork()) return;
+  if (now - g_lastRejoinMs < kRejoinIntervalMs) return;
+  g_lastRejoinMs = now;
+  ++g_rejoins;
+
+  WiFi.disconnect();
+  WiFi.begin(TINYBOT_WIFI_SSID, TINYBOT_WIFI_PASS);
+  for (int i = 0; i < 20 && WiFi.status() != WL_CONNECTED; ++i) delay(300);
+  if (WiFi.status() != WL_CONNECTED) return;
+  for (int i = 0; i < 20 && WiFi.localIP() == IPAddress(0, 0, 0, 0); ++i) delay(250);
+  storeIp(WiFi.localIP());
+  g_server.begin();
+  g_linkLost = false;
+}
+
+void runOta() {
+  g_otaPending = false;
+  if (g_hasClient) closeClient();
+  OTAUpdate ota;
+  // Each step reports its own failure; a success ends in a reset, so the only
+  // sign of it is the new build time in `st` after the robot comes back.
+  static const char kFile[] = "/update.bin";
+  g_otaStatus = "failed at begin";
+  g_otaCode = ota.begin(kFile);
+  if (g_otaCode != OTAUpdate::OTA_ERROR_NONE) return;
+  g_otaStatus = "failed at download";
+  g_otaCode = ota.download(g_otaUrl, kFile);
+  if (g_otaCode <= 0) return;
+  g_otaStatus = "failed at verify";
+  g_otaCode = ota.verify();
+  if (g_otaCode != OTAUpdate::OTA_ERROR_NONE) return;
+  g_otaStatus = "failed at update";
+  g_otaCode = ota.update(kFile);
+}
+
 }  // namespace
 
 bool begin() {
@@ -234,6 +317,15 @@ bool begin() {
 
 void service() {
   if (!g_up) return;
+  // Wait for the reply to the `ota` request to leave first, or the client that
+  // asked never hears that the update started.
+  if (g_otaPending && g_out.length() == 0 && millis() - g_otaRequestedMs > 500 &&
+      idleForBlockingWork()) {
+    runOta();
+    return;
+  }
+  checkLink();
+  if (g_linkLost) return;
   if (g_telemetryOnForWifi && millis() - g_lastTelemetryFetchMs >= 3000) {
     g_telemetryOnForWifi = false;
     if (telemetry::enabled()) telemetry::setEnabled(false);
@@ -296,7 +388,23 @@ void service() {
   }
 }
 
-bool connected() { return g_up; }
+bool connected() { return g_up && !g_linkLost; }
+bool linkLost() { return g_up && g_linkLost; }
+uint32_t drops() { return g_drops; }
+uint32_t rejoins() { return g_rejoins; }
+
+bool requestOta(const char* url) {
+  if (strncmp(url, "http://", 7) != 0) return false;
+  if (strlen(url) >= sizeof(g_otaUrl)) return false;
+  strcpy(g_otaUrl, url);
+  g_otaRequestedMs = millis();
+  g_otaPending = true;
+  g_otaStatus = "pending";
+  return true;
+}
+
+const char* otaStatus() { return g_otaStatus; }
+int otaCode() { return g_otaCode; }
 
 const char* ipAddress() {
   // Refresh in case the lease arrived after begin() gave up waiting.
@@ -347,6 +455,12 @@ namespace wifi_link {
 bool begin() { return false; }
 void service() {}
 bool connected() { return false; }
+bool linkLost() { return false; }
+uint32_t drops() { return 0; }
+uint32_t rejoins() { return 0; }
+bool requestOta(const char*) { return false; }
+const char* otaStatus() { return "not built"; }
+int otaCode() { return 0; }
 const char* ipAddress() { return "0.0.0.0"; }
 bool isAccessPoint() { return false; }
 bool streamingTelemetry() { return false; }

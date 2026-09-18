@@ -80,6 +80,7 @@ const char* stopReasonName(uint8_t reason) {
     case kStopStuck: return "stuck";
     case kStopTimeCap: return "time cap";
     case kStopSafety: return "safety";
+    case kStopLinkLost: return "link lost";
     default: return "?";
   }
 }

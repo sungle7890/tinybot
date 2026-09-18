@@ -21,7 +21,9 @@
 namespace console {
 namespace {
 
-constexpr size_t kLineMax = 64;
+// Long enough for `ota http://<host>:<port>/<file>.ota`; a line that does not
+// fit is cut, and a cut URL fails in a way that points nowhere near the cause.
+constexpr size_t kLineMax = 128;
 char g_line[kLineMax];
 size_t g_len = 0;
 
@@ -54,6 +56,7 @@ void printHelp() {
       "  qz             forget everything learned\n"
       "  h              past driving sessions (rule-based and learning)\n"
       "  hz             clear the session log\n"
+      "  ota <url>      update firmware over Wi-Fi (idle only; http .ota image)\n"
       "  s              stop (coast)\n"
       "  b              brake\n"
       "  e              encoder counts and metres\n"
@@ -72,6 +75,9 @@ void printHelp() {
 
 void cmdStatus() {
   const control::LoopStats s = control::stats();
+  // Build time, so an update - over the air especially - can be seen to have
+  // taken: the robot resets into it and has no other way to say so.
+  fmt::printf("firmware      : built %s %s\n", __DATE__, __TIME__);
   fmt::printf("mode          : %s\n",
                 control::modeName(control::mode()));
   if (control::mode() == control::Mode::kAuto) {
@@ -127,9 +133,15 @@ void cmdStatus() {
                 static_cast<unsigned long>(s.overruns),
                 static_cast<unsigned long>(telemetry::dropped()));
   if (wifi_link::connected()) {
-    fmt::printf("wifi          : %s http://%s\n",
+    fmt::printf("wifi          : %s http://%s  (drops %lu, rejoins %lu)\n",
                 wifi_link::isAccessPoint() ? "own network," : "joined,",
-                wifi_link::ipAddress());
+                wifi_link::ipAddress(),
+                static_cast<unsigned long>(wifi_link::drops()),
+                static_cast<unsigned long>(wifi_link::rejoins()));
+    fmt::printf("ota           : %s (%d)\n", wifi_link::otaStatus(),
+                wifi_link::otaCode());
+  } else if (wifi_link::linkLost()) {
+    fmt::printf("wifi          : LOST - rejoining while idle\n");
   } else {
     fmt::printf("wifi          : off\n");
   }
@@ -332,6 +344,16 @@ void dispatch(char* line) {
   } else if (!strcmp(cmd, "hz")) {
     history::clear();
     fmt::println("session log cleared");
+  } else if (!strcmp(cmd, "ota")) {
+    if (argc < 2) {
+      fmt::println("usage: ota http://<host>:<port>/<file>.ota");
+    } else if (control::mode() != control::Mode::kIdle) {
+      fmt::println("refused: stop first (s) - the update blocks the control loop");
+    } else if (!wifi_link::requestOta(argv[1])) {
+      fmt::println("refused: needs a plain http:// url under 96 characters");
+    } else {
+      fmt::println("ota started - the robot resets when done; check `st` for the build time");
+    }
   } else if (!strcmp(cmd, "qs")) {
     learn::requestSave();
     fmt::println("save requested - check `q` for the write time");

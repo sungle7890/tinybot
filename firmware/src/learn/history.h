@@ -32,6 +32,7 @@ enum StopReason : uint8_t {
   kStopStuck = 2,     // no progress for cfg::kAutoStuckMs
   kStopTimeCap = 3,   // session limit
   kStopSafety = 4,    // a latched fault
+  kStopLinkLost = 5,  // Wi-Fi dropped: no way left to send stop
 };
 
 void begin();

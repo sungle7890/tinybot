@@ -2,6 +2,27 @@
 
 > English: [README_eng.md](README_eng.md)
 
+## 무선 펌웨어 업데이트 (`ota/make_ota.py`)
+
+USB 없이 Wi-Fi로 펌웨어를 올린다. **처음 한 번은 USB가 필요하다** — OTA 기능이 들어간
+펌웨어가 로봇에 있어야 하기 때문이다.
+
+```bash
+cd firmware && pio run -e uno_r4_wifi && cd ..
+python3 host/ota/make_ota.py firmware/.pio/build/uno_r4_wifi/firmware.bin --serve
+```
+
+화면에 나오는 명령(`ota http://<컴퓨터 IP>:8765/tinybot.ota`)을 로봇에 보낸다. 대시보드
+콘솔이나 브라우저 주소창(`/api/cmd?c=ota%20http://...`) 어느 쪽이든 된다.
+
+- 로봇이 **멈춰 있을 때만** 받는다. 받는 동안 제어 루프가 멈추기 때문이다
+- 성공하면 로봇이 재부팅한다. `st`의 `firmware : built ...` 시각이 바뀌었으면 성공
+- 실패하면 `st`의 `ota` 줄에 어느 단계에서 실패했는지 나온다. USB로는 언제든 다시 올릴 수 있다
+- macOS가 python의 외부 접속을 허용할지 물으면 허용해야 로봇이 파일을 받아간다
+
+형식은 Arduino의 `.ota`(LZSS 압축 + 보드 식별번호 + CRC)다. 압축 결과가 Arduino 원본
+인코더와 바이트 단위로 같고, 원본 디코더로 복원해도 원래 펌웨어와 똑같이 나오는 것을 확인했다.
+
 ## 텔레메트리 대시보드 (`dashboard/index.html`)
 
 보드의 50 Hz 텔레메트리를 실시간으로 보는 웹 페이지. 설치 없음. 연결은 두 가지:

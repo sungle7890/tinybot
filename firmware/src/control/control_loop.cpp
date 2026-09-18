@@ -4,6 +4,7 @@
 #include <math.h>
 
 #include "comms/telemetry.h"
+#include "comms/wifi_link.h"
 #include "config.h"
 #include "drive/encoders.h"
 #include "drive/motors.h"
@@ -447,8 +448,18 @@ void driveAction(learn::Action action) {
   }
 }
 
-float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool contact,
-                bool stuck) {
+bool reverses(learn::Action previous, learn::Action action) {
+  switch (action) {
+    case learn::kTurnLeft: return previous == learn::kTurnRight;
+    case learn::kTurnRight: return previous == learn::kTurnLeft;
+    case learn::kForward: return previous == learn::kBack;
+    case learn::kBack: return previous == learn::kForward;
+  }
+  return false;
+}
+
+float rewardFor(learn::Action previous, learn::Action action, float meters,
+                uint16_t frontMm, bool contact, bool stuck) {
   // Encoders count wheel turns, not travel: pinned against a wall, a slipping
   // wheel still reports progress. On a step that ended in contact the ranges
   // have already said the robot went nowhere, so forward distance earns
@@ -459,6 +470,7 @@ float rewardFor(learn::Action action, float meters, uint16_t frontMm, bool conta
   if (frontMm < cfg::kFrontBlockedMm) reward -= cfg::kNearCost;
   if (contact) reward -= cfg::kContactCost;
   if (stuck) reward -= cfg::kStuckCost;
+  if (reverses(previous, action)) reward -= cfg::kReverseCost;
   return reward;
 }
 
@@ -517,7 +529,8 @@ void stepLearn() {
   if (meters > cfg::kLearnProgressM) g_learnProgressMs = now;
   // Decided before scoring, so the step that ran the clock out pays for it.
   const bool stuck = now - g_learnProgressMs > cfg::kAutoStuckMs;
-  const float reward = rewardFor(g_stepAction, meters, front, g_stepContact, stuck);
+  const float reward =
+      rewardFor(g_prevAction, g_stepAction, meters, front, g_stepContact, stuck);
   const uint8_t next = learn::encodeState(front, left, right, g_stepAction);
   learn::update(g_stepState, g_stepAction, reward, next);
 
@@ -601,12 +614,23 @@ void step() {
     case Mode::kDriveDistance:
       stepDriveDistance();  // may call finishDrive() and change the mode
       break;
+    // A session is only started over the radio or the cable, and the radio is
+    // how it gets stopped. If the link drops mid-run, stop rather than drive on
+    // with nothing left that can say stop.
     case Mode::kAuto:
       trackSession();
+      if (wifi_link::linkLost()) {
+        finishAuto("wi-fi link lost", history::kStopLinkLost);
+        break;
+      }
       stepAuto(bumpReason);
       break;
     case Mode::kLearn:
       trackSession();
+      if (wifi_link::linkLost()) {
+        finishLearn("wi-fi link lost", history::kStopLinkLost);
+        break;
+      }
       stepLearn();
       break;
     case Mode::kSafetyStop:

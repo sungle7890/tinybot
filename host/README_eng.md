@@ -2,6 +2,27 @@
 
 > Korean: [README.md](README.md)
 
+## Firmware over Wi-Fi (`ota/make_ota.py`)
+
+Updates the firmware without a cable. **The first time still needs USB** — the robot has to be
+running firmware that has the OTA command in it.
+
+```bash
+cd firmware && pio run -e uno_r4_wifi && cd ..
+python3 host/ota/make_ota.py firmware/.pio/build/uno_r4_wifi/firmware.bin --serve
+```
+
+Send the robot the command it prints (`ota http://<computer IP>:8765/tinybot.ota`), from the
+dashboard console or a browser address bar (`/api/cmd?c=ota%20http://...`).
+
+- The robot only takes it **while idle**: the transfer blocks the control loop
+- On success the robot reboots; the `firmware : built ...` time in `st` changes
+- On failure the `ota` line in `st` says which step failed. USB can always reflash it
+- If macOS asks whether python may accept incoming connections, allow it, or the robot cannot fetch the file
+
+The format is Arduino's `.ota` (LZSS-compressed, board id, CRC). The compressed output matches
+Arduino's own encoder byte for byte, and Arduino's decoder restores the firmware exactly.
+
 ## Telemetry dashboard (`dashboard/index.html`)
 
 A web page showing the board's 50 Hz telemetry live. No install. Two ways in:
