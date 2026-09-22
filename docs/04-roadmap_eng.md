@@ -65,8 +65,12 @@ Loop jitter within ±2 ms of the 50 Hz period.
 - [x] EEPROM checkpoint, **verified across a reboot** (85 steps and ε 0.276 restored intact)
 - [x] Host learning curve — the dashboard plots windowed mean reward live over Wi-Fi
 - [x] 20 unit tests for the learner (`pio test -e native`)
-- [ ] **A learning run on the floor** — not done even once yet
-- [ ] Compare against rule-based roaming (`a`) under the same conditions (forward distance · contacts · escapes)
+- [x] **A learning run on the floor** — learning and driving both work on the robot
+- [x] Compared against rule-based roaming (`a`) under one set of conditions — 2026-09-22, same
+      battery and area, 122 s each: policy 7.81 m/min with 0 contacts vs rules 5.84 m/min with 1
+      (**exit criterion 2 met**)
+- [x] A policy-only mode (`lr`) that never explores, so the comparison is fair
+- [ ] Exit criterion 1: reproduced from a blank table on three separate runs
 
 **Exit**:
 1. The learning curve trends upward and reproduces across 3 different seeds.

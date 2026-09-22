@@ -385,3 +385,27 @@ proof, though. Two stuck events in 69 s is a lot, and the recent reward was −0
 walls and corners are still weak, which fits sensors that see only 13.5 cm ahead.
 
 **Next:** with a full battery, `lr` 3 minutes then `a` 3 minutes, back to back, same conditions.
+
+### Learning beat the rules (2026-09-22, same battery, same area, 122 s each)
+
+| | policy (`lr`) | rule-based (`a`) |
+|---|---|---|
+| forward | **15.88 m** | 11.88 m |
+| per minute | **7.81 m** | 5.84 m |
+| contacts | **0** | 1 |
+| stuck | 0 | 0 |
+
+34 % more distance. Earlier comparisons spanned different days, batteries and parts of the room;
+this one is three runs back to back under one set of conditions (log entries 8, 9, 10).
+
+What led to it:
+
+1. Yesterday's `lr` on the same table (#6): 4.61 m/min, 4 contacts, 7 stuck
+2. Today's `l`, two minutes (#8, 535 steps): 6.13 m/min, 0 contacts, 2 stuck
+3. Straight after, `lr` (#9): **7.81 m/min, 0 contacts, 0 stuck**
+
+The only thing that changed in between was those two minutes of learning. The stuck threshold also
+dropped from 10 s to 4 s for these runs.
+
+**Phase 3 exit criterion 2 (beats the rule-based baseline) is met.** Criterion 1 - reproduced three
+times from a blank table - is not.
