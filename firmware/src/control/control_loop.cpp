@@ -182,10 +182,18 @@ void stepDriveDistance() {
   const float direction = remaining > 0.0f ? 1.0f : -1.0f;
   const float base = direction * ramp * cfg::kDriveDuty;
 
-  // Positive divergence means the left wheel ran ahead, so slow it down.
-  const float divergence =
-      static_cast<float>(encoders::leftCount() - encoders::rightCount());
-  const int16_t correction = clampCorrection(cfg::kHeadingKp * divergence);
+  // Heading is zeroed when the drive starts, so the error is the heading
+  // itself. Clockwise reads negative (measured), and veering clockwise means
+  // the left wheel is running ahead - the same correction the encoder
+  // fallback computes, from a signal that can actually see the error.
+  int16_t correction;
+  if (imu::present() && imu::calibrated()) {
+    correction = clampCorrection(-cfg::kGyroHeadingKp * imu::headingDeg());
+  } else {
+    const float divergence =
+        static_cast<float>(encoders::leftCount() - encoders::rightCount());
+    correction = clampCorrection(cfg::kHeadingKp * divergence);
+  }
 
   motors::set(static_cast<int16_t>(base) - correction,
               static_cast<int16_t>(base) + correction);
@@ -775,6 +783,7 @@ bool requestDriveDistance(float meters) {
   if (!(fabsf(meters) > kArrivedMeters)) return false;
 
   encoders::reset();
+  imu::zeroHeading();  // the line to hold is wherever it points now
   hal::CriticalSection lock;
   g_driveCommanded = meters;
   g_driveTravelled = 0.0f;

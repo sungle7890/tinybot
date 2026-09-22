@@ -428,3 +428,25 @@ from the rate. A measurement taken while the robot moved more than 3 deg/s is di
   chased (10 cm off over 1 m) → **holding a heading with this gyro is workable**
 
 Commands: `g` status, `gz` zero the heading, `gc` re-measure the bias.
+
+### Heading correction works — the Phase 1 leftover is closed (2026-09-22)
+
+The `d` straight drive now holds a line by **gyro heading** instead of matching wheel counts. The
+heading is zeroed at the start and the duty difference is proportional to the angle off it
+(`kGyroHeadingKp`, 12 duty per degree). Without a gyro, or before calibration, it falls back to the
+encoder method.
+
+| | before (2026-09-16) | after |
+|---|---|---|
+| drift over 1 m | **10 cm** right (5.7 deg) | straight to the eye, **1.6 deg** by gyro (~2.7 cm) |
+| weaving | — | none |
+| distance | — | 0.998 m (encoders) |
+
+The first gain tried (12) was kept: there was no weaving to tune out.
+
+This closes what Phase 1 left open - wheel counts agreeing to 0.2 % while the robot ended 10 cm
+off. The cause was the kind of error encoders cannot see, and the fix was to measure the thing
+that was actually wrong.
+
+**Not done yet:** the roaming modes (`a`, `l`, `lr`) still drive forward without it. Adding it
+would help both, but it moves the rule-based baseline, so it waits until the comparisons are settled.

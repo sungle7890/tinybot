@@ -71,7 +71,13 @@ constexpr int32_t kDriveMismatchCounts = 400;
 
 // --- Straight-line drive (calibration aid) ----------------------------------
 constexpr int16_t  kDriveDuty      = 400;   // gentle; calibration is not a race
-constexpr float    kHeadingKp      = 1.2f;  // duty per count of L/R divergence
+// Holding a line. The encoders cannot see this error: over a measured metre
+// the robot ended 10 cm to the right - about 5.7 degrees - while the two wheel
+// counts agreed to 0.2 %. Unequal effective wheel diameter, slip and caster
+// drag all move the robot without disagreeing with the encoders, so heading
+// comes from the gyro and the wheel counts are only the fallback.
+constexpr float    kGyroHeadingKp  = 12.0f; // duty per degree off the line
+constexpr float    kHeadingKp      = 1.2f;  // fallback: duty per count of L/R divergence
 constexpr int16_t  kHeadingCorrMax = 250;
 constexpr uint32_t kDriveTimeoutMs = 15000;
 
