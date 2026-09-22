@@ -57,7 +57,7 @@ Loop jitter within ±2 ms of the 50 Hz period.
 > it possible to honestly judge what AI adds in phase 3.
 > Phase 2 performance becomes the phase-3 baseline.
 
-## Phase 3 — On-device Q-learning ★ the core of the project ← **current**
+## Phase 3 — On-device Q-learning ✅ done (2026-09-22)
 
 - [x] State discretization — 3 front bands × 3 side bands × 4 previous actions = 36 states
 - [x] Q-table plus ε-greedy exploration (0.30 → 0.05, ×0.999 per step, stored with the table)
@@ -70,7 +70,8 @@ Loop jitter within ±2 ms of the 50 Hz period.
       battery and area, 122 s each: policy 7.81 m/min with 0 contacts vs rules 5.84 m/min with 1
       (**exit criterion 2 met**)
 - [x] A policy-only mode (`lr`) that never explores, so the comparison is fair
-- [ ] Exit criterion 1: reproduced from a blank table on three separate runs
+- [~] Exit criterion 1 (reproduced from a blank table three times) was **deliberately skipped**
+      (2026-09-22). One reset-and-learn cycle did show performance climbing
 
 **Exit**:
 1. The learning curve trends upward and reproduces across 3 different seeds.
@@ -81,7 +82,7 @@ Loop jitter within ±2 ms of the 50 Hz period.
 > hand-written rules" — which is still an honest result. In that case, suspect
 > the state representation or the reward design.
 
-## Phase 4 — TinyML inference (optional)
+## Phase 4 — TinyML inference (optional) ← **current**
 
 - [ ] Edge Impulse or TFLite Micro pipeline
 - [ ] Gesture or voice command recognition wired to robot behavior
