@@ -531,7 +531,7 @@ void stepLearn(bool learning) {
   const float meters = static_cast<float>(dCounts) / encoders::countsPerMeter();
   if (meters > cfg::kLearnProgressM) g_learnProgressMs = now;
   // Decided before scoring, so the step that ran the clock out pays for it.
-  const bool stuck = now - g_learnProgressMs > cfg::kAutoStuckMs;
+  const bool stuck = now - g_learnProgressMs > cfg::kLearnStuckMs;
   const float reward =
       rewardFor(g_prevAction, g_stepAction, meters, front, g_stepContact, stuck);
   const uint8_t next = learn::encodeState(front, left, right, g_stepAction);
@@ -546,7 +546,7 @@ void stepLearn(bool learning) {
   g_prevAction = g_stepAction;
   g_stepActive = false;
 
-  // Same rule as roaming: this long without progress means it is wedged.
+  // Wedged: free it with a scripted backup and turn, and carry on.
   if (stuck) {
     ++g_sessEscapes;
     g_escapeLeft = tof::rangeMm(tof::kLeft) >= tof::rangeMm(tof::kRight);

@@ -189,6 +189,11 @@ constexpr float kReverseCost    = 0.5f;
 // frees the robot and learning continues, because a learner that is switched
 // off every time it fails never sees what follows its worst decisions.
 constexpr uint32_t kLearnMaxRunMs    = 600000;
+// Its own stuck threshold, separate from kAutoStuckMs: that one is when the
+// rules give up and stop, and moving it would move the baseline the learner
+// is measured against. A policy run wedged in a corner spent ten seconds
+// there before anything freed it - seven times in one three-minute run.
+constexpr uint32_t kLearnStuckMs     = 4000;
 constexpr float    kLearnProgressM   = 0.02f;   // a step that moved this far
 constexpr uint32_t kLearnEscapeBackMs = 600;
 constexpr uint32_t kLearnEscapeTurnMs = 700;
