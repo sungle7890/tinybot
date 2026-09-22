@@ -24,3 +24,6 @@ checkpoints/
 
 # credentials stay on this machine
 firmware/include/secrets.h
+
+# 촬영 원본 (용량이 커서 저장소에 넣지 않는다)
+progress/originals/
