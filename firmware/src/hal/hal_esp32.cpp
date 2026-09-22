@@ -3,6 +3,7 @@
 #include "hal/hal.h"
 
 #include <Preferences.h>
+#include <esp_system.h>
 #include <driver/gpio.h>
 
 #include "config.h"
@@ -93,6 +94,24 @@ bool persistSave(Slot slot, const void* data, size_t len) {
   prefs.end();
   return written == len;
 }
+
+void captureResetCause() {}
+
+const char* resetCause() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON: return "power-on";
+    case ESP_RST_BROWNOUT: return "brown-out";
+    case ESP_RST_SW: return "software";
+    case ESP_RST_PANIC: return "panic";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT: return "watchdog";
+    case ESP_RST_EXT: return "pin";
+    default: return "unknown";
+  }
+}
+
+uint32_t resetBits() { return static_cast<uint32_t>(esp_reset_reason()); }
 
 bool persistByteAddressable() { return false; }
 bool persistWriteByte(Slot, size_t, uint8_t) { return false; }

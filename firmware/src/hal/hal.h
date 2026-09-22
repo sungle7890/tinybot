@@ -73,6 +73,15 @@ uint32_t microsUntilNextTick();
 bool serialWriteFitsBeforeNextTick(size_t len);
 
 // --- Misc -------------------------------------------------------------------
+// Why the board last started. Read once, at the top of setup(), before
+// anything can clear it: a run that ends with the robot simply gone - no
+// session in the log, the tick counter back at zero - looks the same whether
+// the battery sagged under the motors or the firmware faulted, and the chip
+// knows which it was.
+void captureResetCause();
+const char* resetCause();
+uint32_t resetBits();
+
 uint32_t freeBytes();
 const char* boardName();
 

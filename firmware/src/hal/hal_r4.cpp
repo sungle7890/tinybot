@@ -3,6 +3,7 @@
 #include "hal/hal.h"
 
 #include <EEPROM.h>
+#include <string.h>
 
 #include "config.h"
 
@@ -72,6 +73,54 @@ void pwmWrite(uint8_t pin, uint16_t duty, uint16_t dutyMax) {
 
 // --- GPIO -------------------------------------------------------------------
 int fastRead(uint8_t pin) { return digitalRead(pin); }
+
+// --- Reset cause ------------------------------------------------------------
+namespace {
+char g_resetCause[64] = "not read";
+uint32_t g_resetBits = 0;
+
+void append(const char* what) {
+  const size_t used = strlen(g_resetCause);
+  if (used) strncat(g_resetCause, ", ", sizeof(g_resetCause) - used - 1);
+  strncat(g_resetCause, what, sizeof(g_resetCause) - strlen(g_resetCause) - 1);
+}
+}  // namespace
+
+void captureResetCause() {
+  const uint8_t r0 = R_SYSTEM->RSTSR0;
+  const uint16_t r1 = R_SYSTEM->RSTSR1;
+  g_resetBits = (static_cast<uint32_t>(r1) << 8) | r0;
+
+  g_resetCause[0] = '\0';
+  if (r0 & R_SYSTEM_RSTSR0_PORF_Msk) append("power-on");
+  // The voltage monitors fire when the supply dips below their threshold -
+  // what a motor stall does to a tired battery pack.
+  if (r0 & R_SYSTEM_RSTSR0_LVD0RF_Msk) append("brown-out (LVD0)");
+  if (r0 & R_SYSTEM_RSTSR0_LVD1RF_Msk) append("brown-out (LVD1)");
+  if (r0 & R_SYSTEM_RSTSR0_LVD2RF_Msk) append("brown-out (LVD2)");
+  if (r1 & R_SYSTEM_RSTSR1_IWDTRF_Msk) append("watchdog");
+  if (r1 & R_SYSTEM_RSTSR1_WDTRF_Msk) append("watchdog");
+  if (r1 & R_SYSTEM_RSTSR1_SWRF_Msk) append("software");
+  if (r1 & R_SYSTEM_RSTSR1_RPERF_Msk) append("RAM parity");
+  if (r1 & R_SYSTEM_RSTSR1_REERF_Msk) append("RAM ECC");
+  if (r1 & (R_SYSTEM_RSTSR1_BUSSRF_Msk | R_SYSTEM_RSTSR1_BUSMRF_Msk)) append("bus error");
+  if (r1 & R_SYSTEM_RSTSR1_SPERF_Msk) append("stack pointer error");
+  if (g_resetCause[0] == '\0') {
+    // The reset pin and the debug probe leave no flag, and neither does a
+    // cause the core already cleared before this ran.
+    strcpy(g_resetCause, "pin or unflagged");
+  }
+
+  // Clearing is what makes the next boot's answer meaningful. These registers
+  // sit behind the protect register, so it has to be unlocked first.
+  R_SYSTEM->PRCR = 0xA50B;
+  R_SYSTEM->RSTSR0 = 0;
+  R_SYSTEM->RSTSR1 = 0;
+  R_SYSTEM->PRCR = 0xA500;
+}
+
+const char* resetCause() { return g_resetCause; }
+uint32_t resetBits() { return g_resetBits; }
 
 // --- Persistence ------------------------------------------------------------
 bool persistLoad(Slot slot, void* data, size_t len) {

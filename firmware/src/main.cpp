@@ -30,6 +30,10 @@
 #include "sense/tof.h"
 
 void setup() {
+  // Before anything else: the flags say why the last run ended, and only the
+  // first read of them is the truth.
+  hal::captureResetCause();
+
   Serial.begin(cfg::kSerialBaud);
   delay(200);
 

@@ -79,6 +79,9 @@ void cmdStatus() {
   // Build time, so an update - over the air especially - can be seen to have
   // taken: the robot resets into it and has no other way to say so.
   fmt::printf("firmware      : built %s %s\n", __DATE__, __TIME__);
+  fmt::printf("last reset    : %s (0x%03lX), up %lu s\n", hal::resetCause(),
+              static_cast<unsigned long>(hal::resetBits()),
+              static_cast<unsigned long>(millis() / 1000));
   fmt::printf("mode          : %s\n",
                 control::modeName(control::mode()));
   if (control::mode() == control::Mode::kAuto) {
