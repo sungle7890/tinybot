@@ -79,6 +79,9 @@ bool serialWriteFitsBeforeNextTick(size_t len);
 // the battery sagged under the motors or the firmware faulted, and the chip
 // knows which it was.
 void captureResetCause();
+// Restart the board. Used to check that the flags above are read correctly,
+// and to recover a robot that is idle but wedged, without the power switch.
+void reboot();
 const char* resetCause();
 uint32_t resetBits();
 

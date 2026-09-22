@@ -58,6 +58,7 @@ void printHelp() {
       "  h              past driving sessions (rule-based and learning)\n"
       "  hz             clear the session log\n"
       "  ota <url>      update firmware over Wi-Fi (idle only; http .ota image)\n"
+      "  rb             reboot the board (idle only)\n"
       "  s              stop (coast)\n"
       "  b              brake\n"
       "  e              encoder counts and metres\n"
@@ -361,6 +362,15 @@ void dispatch(char* line) {
       fmt::println("refused: needs a plain http:// url under 96 characters");
     } else {
       fmt::println("ota started - the robot resets when done; check `st` for the build time");
+    }
+  } else if (!strcmp(cmd, "rb")) {
+    if (control::mode() != control::Mode::kIdle) {
+      fmt::println("refused: stop first (s)");
+    } else {
+      fmt::println("rebooting");
+      // The reply has to reach the client before the board goes away.
+      delay(300);
+      hal::reboot();
     }
   } else if (!strcmp(cmd, "qs")) {
     learn::requestSave();

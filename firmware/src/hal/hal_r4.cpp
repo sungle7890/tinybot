@@ -119,6 +119,8 @@ void captureResetCause() {
   R_SYSTEM->PRCR = 0xA500;
 }
 
+void reboot() { NVIC_SystemReset(); }
+
 const char* resetCause() { return g_resetCause; }
 uint32_t resetBits() { return g_resetBits; }
 

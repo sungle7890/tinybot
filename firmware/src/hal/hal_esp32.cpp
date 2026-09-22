@@ -97,6 +97,8 @@ bool persistSave(Slot slot, const void* data, size_t len) {
 
 void captureResetCause() {}
 
+void reboot() { esp_restart(); }
+
 const char* resetCause() {
   switch (esp_reset_reason()) {
     case ESP_RST_POWERON: return "power-on";
