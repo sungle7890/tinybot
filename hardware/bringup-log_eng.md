@@ -409,3 +409,22 @@ dropped from 10 s to 4 s for these runs.
 
 **Phase 3 exit criterion 2 (beats the rule-based baseline) is met.** Criterion 1 - reproduced three
 times from a blank table - is not.
+
+### Gyro bias calibration (2026-09-22)
+
+Step one of heading correction (D). The bias is measured at boot and on `gc`, then subtracted
+from the rate. A measurement taken while the robot moved more than 3 deg/s is discarded.
+
+| measurement | value |
+|---|---|
+| bias | **−2.17 deg/s** — integrated unchecked, that is 130 degrees of drift per minute |
+| rate at rest after correction | ±0.03 deg/s |
+| **heading drift over 30 s at rest** | **0.15 deg** (about 0.3 deg/min) |
+| turned 90 deg clockwise by hand | −88.29 deg |
+
+- Sign: **clockwise is negative**, counter-clockwise positive
+- The 1.9 % scale error is smaller than the error in turning by hand, so the scale factor stands
+- Over a 1 m drive (about 10 s) the drift is around 0.05 deg, against the 5.7 deg error being
+  chased (10 cm off over 1 m) → **holding a heading with this gyro is workable**
+
+Commands: `g` status, `gz` zero the heading, `gc` re-measure the bias.

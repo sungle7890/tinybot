@@ -77,6 +77,9 @@ void setup() {
               learn::loadedFromCheckpoint() ? "loaded from checkpoint" : "blank");
 
   control::begin();
+  // The robot is standing still at boot, which is exactly when the gyro bias
+  // can be measured. `gc` repeats it later; the bias moves with temperature.
+  imu::calibrate();
   console::printStatus();
 }
 

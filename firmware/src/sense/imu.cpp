@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <math.h>
 
+#include "config.h"
 #include "hal/hal.h"
 
 namespace imu {
@@ -32,6 +33,13 @@ uint8_t g_whoAmI = 0;
 
 float g_ax = 0.0f, g_ay = 0.0f, g_az = 0.0f;
 float g_yawRate = 0.0f;
+float g_bias = 0.0f;
+bool g_calibrated = false;
+uint16_t g_calibrateLeft = 0;
+float g_calibrateSum = 0.0f;
+float g_calibrateMax = 0.0f;
+float g_headingDeg = 0.0f;
+uint32_t g_lastUpdateMs = 0;
 float g_baseX = 0.0f, g_baseY = 0.0f, g_baseZ = 0.0f;
 bool g_baselineSeeded = false;
 float g_shock = 0.0f;
@@ -91,7 +99,31 @@ void update() {
   g_ay = be16(&buf[2]) / kAccelLsbPerG;
   g_az = be16(&buf[4]) / kAccelLsbPerG;
   // buf[6..7] is temperature; buf[8..13] is gyro X/Y/Z.
-  g_yawRate = be16(&buf[12]) / kGyroLsbPerDps;
+  const float rawYaw = be16(&buf[12]) / kGyroLsbPerDps;
+
+  if (g_calibrateLeft > 0) {
+    g_calibrateSum += rawYaw;
+    const float swing = fabsf(rawYaw - (g_calibrateSum / (cfg::kGyroBiasSamples - g_calibrateLeft + 1)));
+    if (swing > g_calibrateMax) g_calibrateMax = swing;
+    if (--g_calibrateLeft == 0) {
+      // Moving during the measurement would bake that motion into the bias.
+      if (g_calibrateMax < cfg::kGyroStillDps) {
+        g_bias = g_calibrateSum / cfg::kGyroBiasSamples;
+        g_calibrated = true;
+      }
+    }
+  }
+
+  g_yawRate = rawYaw - g_bias;
+
+  // Integrate on measured time, not on the nominal tick: a stretched tick
+  // would otherwise under-count the turn it contains.
+  const uint32_t now = millis();
+  if (g_lastUpdateMs != 0 && g_calibrateLeft == 0) {
+    const float dt = (now - g_lastUpdateMs) / 1000.0f;
+    if (dt > 0.0f && dt < 0.5f) g_headingDeg += g_yawRate * dt;
+  }
+  g_lastUpdateMs = now;
 
   if (!g_baselineSeeded) {
     g_baseX = g_ax;
@@ -114,6 +146,19 @@ float accelX() { return g_ax; }
 float accelY() { return g_ay; }
 float accelZ() { return g_az; }
 float yawRateDps() { return g_yawRate; }
+float headingDeg() { return g_headingDeg; }
+void zeroHeading() { g_headingDeg = 0.0f; }
+
+void calibrate() {
+  g_calibrateLeft = cfg::kGyroBiasSamples;
+  g_calibrateSum = 0.0f;
+  g_calibrateMax = 0.0f;
+  g_calibrated = false;
+}
+
+bool calibrating() { return g_calibrateLeft > 0; }
+bool calibrated() { return g_calibrated; }
+float biasDps() { return g_bias; }
 float shock() { return g_shock; }
 bool impact() { return g_present && g_shock > kImpactThresholdG; }
 

@@ -216,6 +216,16 @@ constexpr uint16_t kTofOutOfRangeMm   = 8190;   // VL53L0X saturation value
 // rather than as "nothing in front of me".
 constexpr uint32_t kSensorStaleMs = 200;
 
+// --- Gyro ------------------------------------------------------------------
+// A gyro at rest does not read zero; it reads its own bias, and integrating
+// that bias is a heading that drifts on its own. So the bias is measured with
+// the robot standing still - at boot, and on `gc` - and subtracted from then
+// on. It moves with temperature, which is why it is re-measurable.
+constexpr uint16_t kGyroBiasSamples = 100;   // 2 s at 50 Hz
+// Above this the robot is plainly moving, so a calibration started by mistake
+// says so instead of baking motion into the bias.
+constexpr float kGyroStillDps = 3.0f;
+
 // --- Serial -----------------------------------------------------------------
 constexpr unsigned long kSerialBaud = 115200;
 

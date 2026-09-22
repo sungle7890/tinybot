@@ -15,7 +15,21 @@ void update();
 float accelX();  // g
 float accelY();
 float accelZ();
-float yawRateDps();
+float yawRateDps();     // bias removed once calibrated
+
+// Heading, in degrees, integrated from the yaw rate since the last zero.
+// Positive is one way round, negative the other; which is which comes from
+// the measurements, not from a guess here. It drifts over minutes, which is
+// fine for holding a line over a metre and not fine as a compass.
+float headingDeg();
+void zeroHeading();
+
+// Measure the bias with the robot still. Takes cfg::kGyroBiasSamples ticks;
+// calibrating() is true until then, and it fails if the robot was moving.
+void calibrate();
+bool calibrating();
+bool calibrated();
+float biasDps();
 
 // Deviation of the current acceleration vector from its slow-moving baseline,
 // in g. Gravity cancels out, so this reads ~0 at rest at any mounting angle

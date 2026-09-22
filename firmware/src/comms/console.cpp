@@ -65,6 +65,9 @@ void printHelp() {
       "  z              zero the encoders\n"
       "  t              ToF ranges\n"
       "  i              IMU\n"
+      "  g              gyro: rate, bias, heading\n"
+      "  gz             zero the heading\n"
+      "  gc             measure the gyro bias (robot must be still)\n"
       "  j              loop jitter stats\n"
       "  jz             reset jitter stats\n"
       "  d <mm>         drive straight <mm>, closed loop on the encoders\n"
@@ -133,6 +136,10 @@ void cmdStatus() {
                 tof::present(tof::kRight));
   fmt::printf("imu           : %s (WHO_AM_I 0x%02X)\n",
                 imu::present() ? "ok" : "MISSING", imu::whoAmI());
+  fmt::printf("gyro          : %s, bias %+.2f dps, heading %+.1f deg\n",
+              imu::calibrating() ? "measuring bias"
+                                 : (imu::calibrated() ? "calibrated" : "NOT calibrated"),
+              imu::biasDps(), imu::headingDeg());
   fmt::printf("loop          : %lu ticks, %lu overruns, telemetry dropped %lu\n",
                 static_cast<unsigned long>(s.ticks),
                 static_cast<unsigned long>(s.overruns),
@@ -400,6 +407,24 @@ void dispatch(char* line) {
     fmt::println("ok");
   } else if (!strcmp(cmd, "t")) {
     cmdTof();
+  } else if (!strcmp(cmd, "g")) {
+    fmt::printf("rate     : %+.2f dps (bias removed)\n", imu::yawRateDps());
+    fmt::printf("bias     : %+.3f dps  (%s)\n", imu::biasDps(),
+                imu::calibrating() ? "measuring"
+                                   : (imu::calibrated() ? "measured" : "never measured"));
+    fmt::printf("heading  : %+.2f deg since the last zero\n", imu::headingDeg());
+  } else if (!strcmp(cmd, "gz")) {
+    imu::zeroHeading();
+    fmt::println("heading zeroed");
+  } else if (!strcmp(cmd, "gc")) {
+    if (control::mode() != control::Mode::kIdle) {
+      fmt::println("refused: stop first (s) - the robot has to be still");
+    } else {
+      imu::calibrate();
+      fmt::printf("measuring bias over %u ticks (~%u ms) - keep it still\n",
+                  static_cast<unsigned>(cfg::kGyroBiasSamples),
+                  static_cast<unsigned>(cfg::kGyroBiasSamples * cfg::kLoopPeriodMs));
+    }
   } else if (!strcmp(cmd, "i")) {
     cmdImu();
   } else if (!strcmp(cmd, "j")) {
